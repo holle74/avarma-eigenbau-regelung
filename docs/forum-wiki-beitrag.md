@@ -76,12 +76,11 @@ Dazu die Solltemperaturen einzelner Raumthermostate (Lastverteilung). Alles ande
 | **P114** Frequenzreduktion bei erreichtem VL-Soll | 2 % | **3 %** | Mit der Werkseinstellung reagiert die Anlage zu träge und taktet. Mehr Spielraum zum Herunterregeln lässt sie durchlaufen, statt abzuschalten. |
 | **P46** Kompressor-Mindestfrequenz | 35 Hz | **25 Hz** | Mehr Modulationsbereich nach unten. In der Übergangszeit ist der Wärmebedarf oft kleiner als die Mindestleistung – je tiefer sie liegt, desto seltener taktet die Anlage. |
 | **P86** Abtau-Differenz ΔT1 (Außen ≥ −7 °C) | 8,0 K | **5,0 K** | Abtauung früher zulassen. Hintergrund war eine Vereisung, bei der die Anlage viel zu spät abgetaut hat (siehe 3.5). **P91** (dieselbe Differenz unter −7 °C) steht bewusst weiter auf 8,0 K. |
-| **P58** Regel-Temperaturdifferenz der Pumpe | – (vorher 4 K) | **5 K** | Auf diese Spreizung regelt die Umwälzpumpe selbst. Die Vorsteuerung (3.2) rechnet mit genau diesem Wert. |
 | **P63** Warmwasserfunktion | 1 | **0** | Die Anlage heizt nur, es gibt keinen Speicher. |
 | **P68** Durchflussfühler-Typ | 1 (Durchflussmesser) | **0 (Strömungsschalter)** | Vorübergehend: Der Durchflussmesser ist defekt, die Umstellung hat der Hersteller freigegeben (siehe 4.). |
 | **P71 / P72** Lüftersteuerung / Solldrehzahl | Automatik | **Manuell, 400–900 U/min** | Lärm. Die Regelung führt die Drehzahl nach der Verdampfertemperatur nach (siehe 3.4). |
 
-Unverändert und für die Regelung wichtig: **P41** Ölrückführungsfrequenz 50 Hz (Untergrenze des Kompressor-Deckels) und **P59** Pumpen-Mindestdrehzahl 80 %. Wichtig: Nach einem Werksreset stehen P46, P63, P72, P86 und P114 wieder auf Werkseinstellung (siehe 7.).
+Unverändert (Werkseinstellung) und für die Regelung wichtig: **P41** Ölrückführungsfrequenz 50 Hz (Untergrenze des Kompressor-Deckels), **P58** Regel-Temperaturdifferenz der Pumpe 5 K (auf diese Spreizung regelt die Umwälzpumpe, die Vorsteuerung in 3.2 rechnet damit) und **P59** Pumpen-Mindestdrehzahl 80 %. Wichtig: Nach einem Werksreset stehen P46, P63, P72, P86 und P114 wieder auf Werkseinstellung (siehe 7.).
 
 ---
 
