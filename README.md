@@ -35,7 +35,10 @@ Dieses Repo enthält den Code dazu.
 - Raumthermostate in Home Assistant (hier free@home, 9 Räume) und – für die Lastverteilung – Ventilstellungen je Heizkreis
 - Ein **externer Außenfühler** (der eingebaute Avarma-Fühler sitzt oft in der Sonne; hier bis +3,6 K zu warm)
 - Eine Wetter-Integration mit Stundenprognose (für das Vorladen vor Frost)
-- Optional, aber sehr empfohlen: InfluxDB/Grafana, um das Verhalten auszuwerten
+- Optional, aber sehr empfohlen: eine Zeitreihen-Datenbank mit Grafana, um das Verhalten auszuwerten.
+  **Nicht mehr das InfluxDB-1.x-Add-on** – es ist seit August 2026 archiviert und aus dem Store entfernt.
+  Gepflegte Alternativen unter HAOS: InfluxDB 2 oder VictoriaMetrics (jeweils als Community-App).
+  Den Repair-Knopf beim alten Add-on nicht drücken: er deinstalliert es samt Daten.
 
 ## Benötigte Helfer in Home Assistant
 

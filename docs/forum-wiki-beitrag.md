@@ -53,7 +53,9 @@ Ehrlicher Zwischenstand: Punkt 3 bis 5 laufen. Beim Lernen ist ein Teil umgesetz
 - **Raumthermostate** (9 Räume) und ein Heizungsaktor mit **12 Ventilstellungen**.
 - **Externer Außenfühler.** Der eingebaute Fühler der Avarma sitzt bei mir in der Sonne und lag bis zu **+3,6 K zu hoch**, bei vereister Lamelle bis zu 3,9 K zu tief. Die Regelung rechnet deshalb mit einem separaten Funkfühler.
 - **Wetterprognose** (stündlich, 24 h) für das Vorladen vor Frost.
-- **InfluxDB + Grafana** für alle Messwerte – ohne die Auswertungen wäre nichts davon entstanden.
+- **InfluxDB + Grafana** für alle Messwerte – ohne die Auswertungen wäre nichts davon entstanden. **Achtung, siehe Hinweis direkt darunter.**
+
+> ⚠️ **Wer neu anfängt: nicht mehr auf das InfluxDB-Add-on setzen.** Das bisherige Community-Add-on basiert auf InfluxDB 1.x. InfluxData pflegt 1.x nicht mehr, das Add-on wurde im **August 2026 archiviert und aus dem Store genommen** – wer es hat, sieht einen Repair-Hinweis. Es läuft zwar weiter, bekommt aber keine Updates mehr. **Den angebotenen „Reparieren“-Knopf nicht drücken** – er deinstalliert das Add-on samt der gesamten gesammelten Historie. Gepflegte Alternativen für HAOS sind z. B. **InfluxDB 2** (als Community-App) oder **VictoriaMetrics** (Community-App, versteht das InfluxDB-Schreibprotokoll, Grafana bleibt nutzbar). Ich stelle selbst noch um und berichte dann hier.
 
 **Was die Regelung an der Avarma verstellt – mehr nicht:**
 
@@ -267,6 +269,7 @@ Ende August kam dann **E15 (Wasserdurchfluss)** – reproduzierbar kurz nach jed
 - Ein Reload setzt Zustände im Speicher zurück. Alles, was einen Neustart überleben muss, gehört in Helfer.
 - **`set_state` lässt Attribute mit 0, False oder None weg.** Werte, die legitim 0 werden können, als String setzen.
 - `run_every` mit sofortigem Start feuert nicht zuverlässig – Start in die Zukunft legen.
+- **Datenbank:** Das InfluxDB-1.x-Add-on ist seit August 2026 abgekündigt (siehe Abschnitt 2). Für neue Installationen gleich eine gepflegte Zeitreihen-Datenbank wählen und vor jeder Umstellung ein Backup mit der alten Datenbank anlegen.
 [/details]
 
 ---
