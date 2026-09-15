@@ -269,7 +269,7 @@ Weil ich danach sicher gefragt werde: Die Aufteilung war ziemlich klar.
 
 ## 9. Code und Mitmachen
 
-**Repo:** [Link zum Repo]
+**Repo:** https://github.com/holle74/avarma-eigenbau-regelung
 
 Enthalten: ESPHome-Konfiguration, die vier AppDaemon-Apps, die zwei Automationen und eine Liste aller benötigten Helfer. Private Angaben sind entfernt, Entity-IDs müsst ihr an eure Installation anpassen.
 
