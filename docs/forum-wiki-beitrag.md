@@ -17,6 +17,7 @@ Kurz gesagt: Die eingebaute Heizkurve der Avarma kommt mit meinem Haus nicht gut
 - **Estrich-Fußbodenheizung, nicht optimal verlegt:** rund **1.000 m Heizrohr** auf **12 Heizkreise**, **15 cm Verlegeabstand**. Das braucht höhere Vorlauftemperaturen als eine eng verlegte FBH und reagiert sehr träge.
 - **Die Anlage läuft im Winter an ihrem Leistungslimit.** Ab etwa −5 °C Außentemperatur hat sie keine Reserve mehr, ein ausgekühltes Haus wieder hochzuheizen.
 - **Die Anlage soll so leise wie möglich laufen** – Lüfter und Kompressor nicht höher als nötig, nachts erst recht.
+- **Die Avarma heizt bei mir nur.** Warmwasser läuft nicht über sie, es gibt keinen Speicher an der Anlage (P63 = 0). Alles hier bezieht sich deshalb ausschließlich auf den Heizbetrieb.
 
 **Das eigentliche Problem:** Eine statische Heizkurve reagiert nur auf die *aktuelle* Außentemperatur. Mit dem trägen Estrich ist das bei einer Frostnacht Stunden zu spät. Früher habe ich morgens von Hand hochgedreht, wenn abends Frost angesagt war. Das sollte die Regelung selbst können.
 
@@ -67,6 +68,20 @@ Ehrlicher Zwischenstand: Punkt 3 bis 5 laufen. Beim Lernen ist ein Teil umgesetz
 Dazu die Solltemperaturen einzelner Raumthermostate (Lastverteilung). Alles andere macht der eingebaute Regler der Avarma weiterhin selbst – das ist Absicht.
 
 **Sicherheitsnetz im ESP:** Kommt 30 Minuten lang kein Befehl aus Home Assistant (Heartbeat), setzt der ESP Vorlauf-Soll auf 32 °C und Kompressor-Maximum auf 90 Hz zurück. Grenzwerte stehen hart an den Entities (Vorlauf-Soll max. 45 °C, Kompressor 50–120 Hz). Den Werksreset P87 habe ich bewusst **nicht** als Entity angelegt – ein Fehlklick hätte die ganze Parametrierung verworfen.
+
+**Geänderte Parameter – und warum** (Werte am 15.09. an der Anlage ausgelesen):
+
+| Parameter | Werk | Bei mir | Warum |
+|---|---|---|---|
+| **P114** Frequenzreduktion bei erreichtem VL-Soll | 2 % | **3 %** | Mit der Werkseinstellung reagiert die Anlage zu träge und taktet. Mehr Spielraum zum Herunterregeln lässt sie durchlaufen, statt abzuschalten. |
+| **P46** Kompressor-Mindestfrequenz | 35 Hz | **25 Hz** | Mehr Modulationsbereich nach unten. In der Übergangszeit ist der Wärmebedarf oft kleiner als die Mindestleistung – je tiefer sie liegt, desto seltener taktet die Anlage. |
+| **P86** Abtau-Differenz ΔT1 (Außen ≥ −7 °C) | 8,0 K | **5,0 K** | Abtauung früher zulassen. Hintergrund war eine Vereisung, bei der die Anlage viel zu spät abgetaut hat (siehe 3.5). **P91** (dieselbe Differenz unter −7 °C) steht bewusst weiter auf 8,0 K. |
+| **P58** Regel-Temperaturdifferenz der Pumpe | – (vorher 4 K) | **5 K** | Auf diese Spreizung regelt die Umwälzpumpe selbst. Die Vorsteuerung (3.2) rechnet mit genau diesem Wert. |
+| **P63** Warmwasserfunktion | 1 | **0** | Die Anlage heizt nur, es gibt keinen Speicher. |
+| **P68** Durchflussfühler-Typ | 1 (Durchflussmesser) | **0 (Strömungsschalter)** | Vorübergehend: Der Durchflussmesser ist defekt, die Umstellung hat der Hersteller freigegeben (siehe 4.). |
+| **P71 / P72** Lüftersteuerung / Solldrehzahl | Automatik | **Manuell, 400–900 U/min** | Lärm. Die Regelung führt die Drehzahl nach der Verdampfertemperatur nach (siehe 3.4). |
+
+Unverändert und für die Regelung wichtig: **P41** Ölrückführungsfrequenz 50 Hz (Untergrenze des Kompressor-Deckels) und **P59** Pumpen-Mindestdrehzahl 80 %. Wichtig: Nach einem Werksreset stehen P46, P63, P72, P86 und P114 wieder auf Werkseinstellung (siehe 7.).
 
 ---
 
