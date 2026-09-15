@@ -1,0 +1,93 @@
+# Zwei Automationen, die die Regelung braucht bzw. absichern.
+# In Home Assistant ueber Einstellungen -> Automationen -> YAML bearbeiten einfuegen.
+
+- alias: "WP: Wetterprognose Frost-Vorschau (24h)"
+  description: >-
+    Ruft die stuendliche Wetterprognose ab und schreibt die Minimaltemperatur der
+    naechsten 24 h in input_number.wp_prognose_aussentemperatur_minimum_24h.
+    Grundlage fuer das Vorladen vor Frostnaechten.
+  triggers:
+    - trigger: time_pattern
+      minutes: "/30"
+    - trigger: homeassistant
+      event: start
+  actions:
+    - action: weather.get_forecasts
+      target:
+        entity_id: weather.home
+      data:
+        type: hourly
+      response_variable: forecast
+    - variables:
+        now_iso: "{{ utcnow().strftime('%Y-%m-%dT%H:%M:%SZ') }}"
+        cutoff_iso: "{{ (utcnow() + timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%SZ') }}"
+    - variables:
+        upcoming_temps: >-
+          {{ forecast['weather.home'].forecast
+             | selectattr('datetime', 'ge', now_iso)
+             | selectattr('datetime', 'le', cutoff_iso)
+             | map(attribute='temperature') | list }}
+    - variables:
+        min_temp_24h: "{{ upcoming_temps | min if upcoming_temps | count > 0 else none }}"
+    - if:
+        - condition: template
+          value_template: "{{ min_temp_24h is not none }}"
+      then:
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.wp_prognose_aussentemperatur_minimum_24h
+          data:
+            value: "{{ min_temp_24h }}"
+  mode: single
+
+# Nur noetig, wenn die Anlage wie hier mit P68 = 0 (Stroemungsschalter) laeuft und die
+# quantitative Durchflusspruefung gegen P61 damit entfaellt. Nach Einbau eines
+# funktionierenden Durchflussmessers wieder entfernen.
+- alias: "WP-Schutz: Durchfluss (Interim P68=0)"
+  description: >-
+    Schaltet die WP ab, wenn bei laufendem Kompressor die Spreizung ueber 10 K steigt
+    oder die Pumpenleistung unter 30 % faellt. Sperrt ZUERST den Autostart-Helfer,
+    sonst startet die Regelung die WP im naechsten Zyklus wieder.
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.wp_spreizung_vl_rl
+      above: 10
+      for: "00:01:00"
+      id: spreizung
+    - trigger: numeric_state
+      entity_id: sensor.esphome_web_f34aa0_c1_wasserpumpenleistung
+      below: 30
+      for: "00:01:00"
+      id: pumpe
+    - trigger: numeric_state
+      entity_id: sensor.esphome_web_avarma_kompressor_frequenz_ist
+      above: 0
+      for: "00:01:30"
+      id: anlauf
+  conditions:
+    - condition: numeric_state
+      entity_id: sensor.esphome_web_avarma_kompressor_frequenz_ist
+      above: 0
+    - condition: or
+      conditions:
+        - condition: numeric_state
+          entity_id: sensor.wp_spreizung_vl_rl
+          above: 10
+        - condition: numeric_state
+          entity_id: sensor.esphome_web_f34aa0_c1_wasserpumpenleistung
+          below: 30
+  actions:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.wp_autostart_aktiv
+    - action: switch.turn_off
+      target:
+        entity_id: switch.esphome_web_avarma_warmepumpe_ein_aus
+    - action: notify.notify
+      data:
+        title: "WP abgeschaltet - Durchflussverdacht"
+        message: >-
+          Ausloeser: {{ trigger.id }} | Spreizung {{ states('sensor.wp_spreizung_vl_rl') | float(0) | round(1) }} K |
+          Pumpe {{ states('sensor.esphome_web_f34aa0_c1_wasserpumpenleistung') }} % |
+          Kompressor {{ states('sensor.esphome_web_avarma_kompressor_frequenz_ist') }} Hz
+  mode: single

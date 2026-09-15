@@ -1,0 +1,26 @@
+# Heizungs-Apps fuer AppDaemon. Entity-IDs stehen als Konstanten oben in den
+# .py-Dateien und muessen an die eigene Installation angepasst werden.
+heizung_beobachter:
+  module: heizung_beobachter
+  class: HeizungBeobachter
+  interval_seconds: 300
+
+heizung_lastverteilung:
+  module: heizung_lastverteilung
+  class: HeizungLastverteilung
+
+# Die eigentliche Regelung. Zum Stoppen "  disable: true" als letzte Zeile des
+# Blocks einfuegen und AppDaemon neu starten - oder input_boolean.wp_autostart_aktiv
+# ausschalten (verhindert nur den automatischen Start).
+heizung_vlt_kompressor_regelung:
+  module: heizung_vlt_kompressor_regelung
+  class: HeizungVltKompressorRegelung
+
+# Reiner Beobachter - schreibt nichts an die Waermepumpe.
+heizung_thermometrie:
+  module: heizung_thermometrie
+  class: HeizungThermometrie
+  max_tage: 120
+  # latitude: 0.0
+  # longitude: 0.0
+  # wetter_entity: weather.home

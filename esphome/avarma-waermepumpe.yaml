@@ -1,0 +1,2514 @@
+# -------------------- Basis-Konfiguration --------------------
+esphome:
+  name: esphome-web-f34aa0
+  friendly_name: ESPHome Web AVARMA
+  min_version: 2026.4.0
+  name_add_mac_suffix: false
+
+esp32:
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+logger:
+api:
+ota:
+  - platform: esphome
+
+# -------------------- WLAN --------------------
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Optional feste IP - eigene Werte eintragen oder den Block weglassen (DHCP)
+  # manual_ip:
+  #   static_ip: 192.168.x.x
+  #   gateway: 192.168.x.1
+  #   subnet: 255.255.255.0
+
+# -------------------- UART / RS485 --------------------
+uart:
+  id: modbus_uart_bus
+  tx_pin: 17
+  rx_pin: 18
+  baud_rate: 9600
+
+# -------------------- Modbus --------------------
+modbus:
+  id: modbus1
+  uart_id: modbus_uart_bus
+  flow_control_pin: 21
+  send_wait_time: 50ms
+
+modbus_controller:
+  - id: modbus_device
+    address: 0x1
+    modbus_id: modbus1
+    setup_priority: -10
+    update_interval: 10s
+    # command_throttle entfernt 2026-08-25: seit ESPHome 2026.8 wirkungslos
+    # ("Command spacing is handled by the 'modbus' component"). Die Befehlspause
+    # macht send_wait_time: 50ms oben im modbus:-Block.
+
+# -------------------- Agent-Heartbeat: Zustand --------------------
+# Sicherheitsnetz fuer die geplante AppDaemon-Regelung (VLT/Kompressor).
+# Solange der Agent nie aktiv eingreift, bleibt agent_hat_kontrolle false
+# und der Watchdog weiter unten tut nichts - stoert also keine manuelle Bedienung.
+globals:
+  - id: letzter_heartbeat_millis
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: agent_hat_kontrolle
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+# -------------------- Temperaturen (0x1100, Faktor x0.1 °C) --------------------
+sensor:
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Außentemperatur"
+    id: ambient_temp
+    register_type: holding
+    address: 4360
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Vorlauftemperatur"
+    id: water_outlet_temp
+    register_type: holding
+    address: 4366
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Rücklauftemperatur"
+    id: water_inlet_temp
+    register_type: holding
+    address: 4365
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Verdampfertemperatur"
+    id: coil_temp
+    register_type: holding
+    address: 4358
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Heißgastemperatur"
+    id: discharge_temp
+    register_type: holding
+    address: 4359
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Sauggastemperatur"
+    id: suction_temp
+    register_type: holding
+    address: 4361
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "EVI Einlasstemperatur"
+    id: evi_inlet_temp
+    register_type: holding
+    address: 4362
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "EVI Auslasstemperatur"
+    id: evi_outlet_temp
+    register_type: holding
+    address: 4363
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Raumtemperatur T2"
+    id: room_temp
+    register_type: holding
+    address: 4384
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "IPM Temperatur"
+    id: ipm_temp
+    register_type: holding
+    address: 4380
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Temperaturdifferenz Hauptkreis"
+    id: main_temp_diff
+    register_type: holding
+    address: 4369
+    value_type: S_WORD
+    unit_of_measurement: "K"
+    accuracy_decimals: 1
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+# -------------------- Kompressor & Lüfter (0x1100) --------------------
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Frequenz Ist"
+    id: compressor_freq
+    register_type: holding
+    address: 4373
+    value_type: U_WORD
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    state_class: measurement
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Frequenz Soll"
+    id: compressor_target_freq
+    register_type: holding
+    address: 4378
+    value_type: U_WORD
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    state_class: measurement
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Strom"
+    id: compressor_current
+    register_type: holding
+    address: 4379
+    value_type: U_WORD
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Betriebsstunden"
+    id: compressor_runningtime
+    register_type: holding
+    address: 4610
+    value_type: U_WORD
+    unit_of_measurement: "h"
+    device_class: duration
+    state_class: total_increasing
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Lüfter 1 Drehzahl"
+    id: fan1_speed
+    register_type: holding
+    address: 4374
+    value_type: U_WORD
+    unit_of_measurement: "RPM"
+    state_class: measurement
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "EEV Schritte"
+    id: eev_steps
+    register_type: holding
+    address: 4376
+    value_type: U_WORD
+    unit_of_measurement: "P"
+    state_class: measurement
+
+# -------------------- Wasserpumpe & Durchfluss --------------------
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Durchfluss"
+    id: water_flow
+    register_type: holding
+    address: 4368
+    value_type: U_WORD
+    unit_of_measurement: "L/min"
+    accuracy_decimals: 1
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "C1 Wasserpumpenleistung"
+    id: c1_pump_percent
+    register_type: holding
+    address: 4611
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    state_class: measurement
+
+# -------------------- Druck (0x1100) --------------------
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Hochdruck"
+    id: high_pressure
+    register_type: holding
+    address: 4371
+    value_type: U_WORD
+    unit_of_measurement: "bar"
+    accuracy_decimals: 1
+    device_class: pressure
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Niederdruck"
+    id: low_pressure
+    register_type: holding
+    address: 4372
+    value_type: U_WORD
+    unit_of_measurement: "bar"
+    accuracy_decimals: 2
+    device_class: pressure
+    state_class: measurement
+    filters:
+      - multiply: 0.01
+
+# -------------------- Spannung --------------------
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Netzspannung"
+    id: ac_voltage
+    register_type: holding
+    address: 4381
+    value_type: U_WORD
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+
+# -------------------- Status & Betrieb (0x1200) --------------------
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Betriebsmodus"
+    id: running_mode
+    register_type: holding
+    address: 4612
+    value_type: U_WORD
+    state_class: measurement
+    # 0=Aus, 1=Warmwasser, 2=Heizen, 4=Kühlen
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtauvorgänge"
+    id: defrost_count
+    register_type: holding
+    address: 4613
+    value_type: U_WORD
+    state_class: total_increasing
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Betriebsstatus"
+    id: operating_status
+    register_type: holding
+    address: 4354
+    value_type: U_WORD
+    # bit0=Standby, bit1=Ein, bit2=Aus, bit4=Abtauen, bit9=Frostschutz
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Fehlercode 0"
+    id: fault_state_0
+    register_type: holding
+    address: 4390
+    value_type: U_WORD
+    # Fault State 0, Bits E01-E16. 0 = kein Fehler.
+    # Korrigiert 2026-08-18: stand vorher auf 4389, das ist laut Hofman-Tabelle
+    # aber "Calculating Temperature From Energy Requirements" (0,1 °C), keine
+    # Fehlermaske. Die Tabelle listet zwei Adressspalten - "Decimal" ist die
+    # echte Modbus-Adresse, "Decimal+1" nur die Anzeige am Bedienpanel.
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Fehlercode 1"
+    id: fault_state_1
+    register_type: holding
+    address: 4391
+    value_type: U_WORD
+    # Fault State 1, Bits E17-E32 (u.a. Netzspannungsfehler).
+    # Korrigiert 2026-08-18: stand vorher auf 4390 und las damit Fault State 0.
+
+# -------------------- Oelrueckfuehrung (2026-08-22) --------------------
+# Der Verdichter braucht periodisch eine hoehere Drehzahl, damit das Schmieroel
+# aus dem Kreislauf zurueckgefoerdert wird; bei dauerhaft niedriger Frequenz
+# sammelt es sich im Verdampfer und in den Leitungen. Beide Register werden
+# gebraucht, seit heizung_vlt_kompressor_regelung.py die Kompressor-
+# Maximalfrequenz lastabhaengig deckelt: Solange unbekannt ist, ob P46 den
+# Oelrueckfuehrungsmodus begrenzt, muss der Deckel vorsorglich hoch bleiben.
+#
+# P41 bewusst als Sensor und NICHT als number: Es ist eine Herstellereinstellung,
+# an der im Normalbetrieb niemand drehen sollte. Aendern im Servicefall ueber das
+# Bedienpanel - dieselbe Ueberlegung wie bei P87 (Werksreset), der aus demselben
+# Grund gar nicht erst angelegt ist.
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Oelrueckfuehrung Frequenz"
+    id: oil_return_freq
+    register_type: holding
+    address: 8231
+    value_type: U_WORD
+    unit_of_measurement: "Hz"
+    state_class: measurement
+    # Aendert sich nie von selbst. skip_updates zaehlt Controller-Zyklen, nicht
+    # Sekunden - bei update_interval: 10s am modbus_controller sind 360 Zyklen
+    # also eine Stunde. (update_interval gibt es bei modbus_controller nur am Hub,
+    # nicht pro Entity.)
+    skip_updates: 360
+    # P41, Bereich 10~100 Hz, Werkseinstellung laut Hofman-Tabelle 50 Hz.
+    # "actual value", also keine Skalierung.
+
+# -------------------- Abtau-Parameter: nur lesen (0x2000) --------------------
+# Diagnose der Vereisungsepisode vom 24.08.2026: Der Verdampfer lief zwischen
+# 08:39 und 09:20 bis auf -12 °C runter, obwohl P29 (Startschwelle) auf -3 °C
+# steht und die letzte Abtauung 2 h 40 min zurueck lag. Es muss also eine zweite
+# Bedingung greifen - P85 (Umgebungstemperatur-Sperre) oder P86 (geforderte
+# Differenz Umgebung/Lamelle). Beides ist bislang nicht ausgelesen.
+#
+# Bewusst erst nur lesend: erst sehen, womit der Regler ueberhaupt arbeitet,
+# bevor irgendwer daran dreht. Zum Schreiben spaeter reicht der Wechsel von
+# "sensor:" auf "number:" mit min_value/max_value aus der Hofman-Tabelle.
+#
+# Konfigurationsregister aendern sich nie von selbst - skip_updates zaehlt
+# Controller-Zyklen, bei update_interval: 10s sind 360 also eine Stunde.
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtau Intervall-Multiplikator"
+    id: defrost_interval_multiplier
+    register_type: holding
+    address: 8216
+    skip_updates: 360
+    value_type: U_WORD
+    state_class: measurement
+    entity_category: diagnostic
+    # P26, Bereich 0~4. ACHTUNG: 0 bedeutet "gar keine Abtauung".
+    # 1/2/3/4 multiplizieren den Zyklus aus P27.
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtau Zyklus"
+    id: defrost_cycle_minutes
+    register_type: holding
+    address: 8217
+    skip_updates: 360
+    value_type: U_WORD
+    unit_of_measurement: "min"
+    state_class: measurement
+    entity_category: diagnostic
+    # P27, Bereich 15~99 min. Mindestabstand zwischen zwei Abtauungen,
+    # zusammen mit P26 der eigentliche Takt.
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtau Maximaldauer"
+    id: defrost_max_minutes
+    register_type: holding
+    address: 8221
+    skip_updates: 360
+    value_type: U_WORD
+    unit_of_measurement: "min"
+    state_class: measurement
+    entity_category: diagnostic
+    # P31, Bereich 2~20 min. Nach dieser Zeit bricht die Abtauung ab, auch wenn
+    # die Lamelle die Endtemperatur aus P30 (20 °C) nicht erreicht hat.
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtau Umgebungstemperatur-Grenze"
+    id: defrost_ambient_limit
+    register_type: holding
+    address: 8275
+    skip_updates: 360
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.1
+    # P85 "Ambient temperature for defrosting", Bereich 0~20 °C. Oberhalb dieser
+    # Aussentemperatur taut der Regler nicht ab. Kritisch, weil der interne
+    # AT-Fuehler der Avarma in der Sonne bis zu 4 K zu warm misst (gemessen am
+    # 24.08.2026 gegen sensor.temperaturfuhler_heizung_temperatur): bei realen
+    # 2 °C und Sonne meldet er 6-7 °C und kann die Abtauung sperren.
+
+# -------------------- Betriebsgrenzen: nur lesen (0x2000) --------------------
+# Aufgenommen 2026-08-24, um zwei offene Fragen dieses Tages beantworten zu koennen.
+# Alle bewusst nur lesend - es sind Schutz- und Auslegungsgrenzen, keine Sollwerte.
+# Konfigurationsregister, aendern sich nie von selbst: skip_updates 360 entspricht
+# bei update_interval 10s einer Stunde.
+
+  # P102 - Schutzgrenze fuer die Spreizung zwischen Ein- und Austritt, 8~20 °C.
+  # Ausgelesen 2026-08-24: 12,0 K.
+  #
+  # Aufgenommen als Verdacht, der sich sofort erledigt hat - die Notiz bleibt, damit
+  # der Irrtum nicht noch einmal gemacht wird: Am 24.08.2026 sah es im Log so aus,
+  # als stuenden Vorlauf 45 °C gegen Ruecklauf 28,5 °C, also 16,5 K Spreizung. Die
+  # 45 °C waren aber der SOLLWERT der Regelung, nicht der Istwert. Tatsaechlich lag
+  # der Vorlauf bei 32,7-35,6 °C, die echte Spreizung bei 5-6 K - weit unter dieser
+  # Grenze. Es gab also weder eine Schutzbegrenzung noch ein Hydraulikproblem.
+  #
+  # Merksatz fuer kuenftige Auswertungen: number.esphome_web_f34aa0_vorlauf_
+  # solltemperatur ist der Stellwert, sensor.esphome_web_avarma_vorlauftemperatur
+  # der Messwert. Im Regelungs-Log ("VLT angehoben 44->45") steht der Stellwert.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Schutzgrenze Spreizung Vor- und Ruecklauf"
+    id: water_delta_protection
+    register_type: holding
+    address: 8292
+    skip_updates: 360
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.1
+
+  # P42/P43/P44 - Stromgrenzen des Kompressors, je 1~50 A.
+  #
+  # WARUM: heizung_vlt_kompressor_regelung.py hebt bei Unterversorgung den
+  # Frequenzdeckel an (number.esphome_web_avarma_kompressor_maximalfrequenz).
+  # Bindet in Wahrheit die Stromgrenze, laeuft das ins Leere - der Kompressor
+  # bleibt stehen, wo er steht, und die Regelung deutet das als "am Deckel" und
+  # legt weiter nach. Der Iststrom wird bereits geloggt (7,8 A am 24.08. mittags),
+  # die Grenzen dazu fehlten.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Strom Frequenzanhebung gesperrt ab"
+    id: comp_current_no_up
+    register_type: holding
+    address: 8232
+    skip_updates: 360
+    value_type: U_WORD
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Strom Frequenzabsenkung ab"
+    id: comp_current_down
+    register_type: holding
+    address: 8233
+    skip_updates: 360
+    value_type: U_WORD
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Strom Abschaltung ab"
+    id: comp_current_stop
+    register_type: holding
+    address: 8234
+    skip_updates: 360
+    value_type: U_WORD
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.1
+
+  # P60 - hoechste Drehzahl, die der DC-Luefter fahren darf. Registerbereich laut
+  # Hofman-Tabelle 500~1500 RPM, ausgelesen 2026-08-24: 900 RPM.
+  #
+  # BEANTWORTET: Die Frage war, ob hinter FAN_MAX_RPM = 900 in
+  # heizung_vlt_kompressor_regelung.py noch Luftreserve steckt. Nein - 900 ist das
+  # Maximum des Luefters dieser Avarma (2026-08-24). Der Registerbereich
+  # bis 1500 gilt fuer die Baureihe, nicht fuer dieses Geraet. NICHT hochsetzen.
+  #
+  # Damit ist auch geklaert, dass am 24.08.2026 "Luefter auf Volllast 900 RPM"
+  # wirklich das Ende der Fahnenstange war: Gegen die Vereisung blieb nur noch
+  # Abtauen, mehr Luft gab es nicht.
+  #
+  # Skalierung wie bei P72 (Register 8262, empirisch bestaetigt 2026-07-23):
+  # Rohwert * 10 = reale Drehzahl. Die Hofman-Tabelle schreibt "display value*10".
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Luefter Maximaldrehzahl (Anlage)"
+    id: fan_max_speed_device
+    register_type: holding
+    address: 8250
+    skip_updates: 360
+    value_type: U_WORD
+    unit_of_measurement: "RPM"
+    accuracy_decimals: 0
+    state_class: measurement
+    entity_category: diagnostic
+    filters:
+      - multiply: 10
+
+# ============================================================================
+# VOLLAUSLESUNG PARAMETERBLOCK 0x2000 - TEMPORAER (2026-08-25)
+# ============================================================================
+# Zweck: vollstaendige Sicherung aller Anlagenparameter, bevor ueber P87 ein
+# Werksreset ausgeloest wird. Anlass ist E15 "Water flow error", der sich seit
+# 24.08.2026 11:38 bei jedem Start reproduziert.
+#
+# BEWUSST OHNE SKALIERUNG: Hier stehen ROHWERTE, so wie sie im Register liegen.
+# Das ist Absicht - beim Zurueckschreiben zaehlt der Rohwert, und jede
+# Umrechnung waere eine zusaetzliche Fehlerquelle. Ein Wert von 50 kann also je
+# nach Parameter 50 Hz, 5,0 Grad oder 500 RPM bedeuten; die Umrechnung steht in
+# der Hofman-Tabelle (Hofman-Modbus-Tabelle).
+#
+# Alle als S_WORD gelesen: negative Temperaturen kommen damit korrekt heraus.
+# Ein negativer Wert bei einem Parameter, der nur positiv sein kann, waere ein
+# Rohwert ueber 32767 - kommt in diesem Block nicht vor.
+#
+# BLOCKGRENZEN (Korrektur 2026-08-25, nach dem ersten Fehlversuch):
+# Modbus-Funktionscode 3 liest hoechstens 125 Register pro Anfrage. Der Bereich
+# 8192-8326 sind 135 - ESPHome fasst benachbarte Register zu EINER Abfrage
+# zusammen, und die war damit zu gross. Sie scheiterte komplett, und weil die
+# schon vorher vorhandenen Parameter-Register (P26/P29/P86/P114 ...) im selben
+# zusammenhaengenden Bereich liegen, lasen die ebenfalls nicht mehr.
+# force_new_range: true erzwingt alle 10 Register eine neue Anfrage. Damit
+# bleibt jede weit unter dem Limit, und ein nicht belegtes Register reisst nur
+# seine neun Nachbarn mit statt den ganzen Block.
+#
+# NACH DEM SICHERN WIEDER ENTFERNEN: Dieser Block legt 135 Entities an. Er ist
+# fuer die einmalige Dokumentation gedacht, nicht fuer den Dauerbetrieb.
+# Zum Entfernen alles zwischen dieser Kopfzeile und "ENDE VOLLAUSLESUNG"
+# loeschen und neu flashen.
+# ============================================================================
+
+  # P0 (0x2000+0): Function selection 1
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P0 roh"
+    id: praw_8192
+    register_type: holding
+    address: 8192
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P1 (0x2000+1): Function selection 2
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P1 roh"
+    id: praw_8193
+    register_type: holding
+    address: 8193
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P105 (0x2000+2): Compressor frequency up A platform
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P105 roh"
+    id: praw_8194
+    register_type: holding
+    address: 8194
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P106 (0x2000+3): Compressor A platform delay time PLAT_A_TIM 1s 0-300s actu
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P106 roh"
+    id: praw_8195
+    register_type: holding
+    address: 8195
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P6 (0x2000+4): A/C Hysteresis temperature (cooling and
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P6 roh"
+    id: praw_8196
+    register_type: holding
+    address: 8196
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P7 (0x2000+5): DHW Hysteresis temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P7 roh"
+    id: praw_8197
+    register_type: holding
+    address: 8197
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P8 (0x2000+6): A/C Heating AU maximum temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P8 roh"
+    id: praw_8198
+    register_type: holding
+    address: 8198
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P9 (0x2000+7): A/C Heating AU offset temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P9 roh"
+    id: praw_8199
+    register_type: holding
+    address: 8199
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P10 (0x2000+8): Sterilization interval days
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P10 roh"
+    id: praw_8200
+    register_type: holding
+    address: 8200
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P11 (0x2000+9): Sterilization start time
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P11 roh"
+    id: praw_8201
+    register_type: holding
+    address: 8201
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P12 (0x2000+10): Sterilization run time
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P12 roh"
+    id: praw_8202
+    register_type: holding
+    address: 8202
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P13 (0x2000+11): Sterilization temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P13 roh"
+    id: praw_8203
+    register_type: holding
+    address: 8203
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P14 (0x2000+12): Sterilization mode selection
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P14 roh"
+    id: praw_8204
+    register_type: holding
+    address: 8204
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P15 (0x2000+13): Night mode starting time
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P15 roh"
+    id: praw_8205
+    register_type: holding
+    address: 8205
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P16 (0x2000+14): Night mode ending time
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P16 roh"
+    id: praw_8206
+    register_type: holding
+    address: 8206
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P17 (0x2000+15): Night mode effective
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P17 roh"
+    id: praw_8207
+    register_type: holding
+    address: 8207
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P18 (0x2000+16): DHW AU function
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P18 roh"
+    id: praw_8208
+    register_type: holding
+    address: 8208
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P19 (0x2000+17): AC Heating Model AU enable
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P19 roh"
+    id: praw_8209
+    register_type: holding
+    address: 8209
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P20 (0x2000+18): Water pump working way
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P20 roh"
+    id: praw_8210
+    register_type: holding
+    address: 8210
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P21 (0x2000+19): Water pump antifreeze time
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P21 roh"
+    id: praw_8211
+    register_type: holding
+    address: 8211
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P22 (0x2000+20): A/C Electric Auxiliary Thermal Start Ambient
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P22 roh"
+    id: praw_8212
+    register_type: holding
+    address: 8212
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P23 (0x2000+21): DHW Electric Auxiliary Thermal Start Ambient
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P23 roh"
+    id: praw_8213
+    register_type: holding
+    address: 8213
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P24 (0x2000+22): Electric heating E1/E2 stop ambient
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P24 roh"
+    id: praw_8214
+    register_type: holding
+    address: 8214
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P25 (0x2000+23): A/C antifreeze temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P25 roh"
+    id: praw_8215
+    register_type: holding
+    address: 8215
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+
+
+  # P28 (0x2000+26): Defrost mode (it will default to 0 after the
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P28 roh"
+    id: praw_8218
+    register_type: holding
+    address: 8218
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P29 (0x2000+27): Defrost Start Coil Temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P29 roh"
+    id: praw_8219
+    register_type: holding
+    address: 8219
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P30 (0x2000+28): Defrost end Coil Temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P30 roh"
+    id: praw_8220
+    register_type: holding
+    address: 8220
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+
+  # P32 (0x2000+30): Parameter 31 Main valve control way
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P32 roh"
+    id: praw_8222
+    register_type: holding
+    address: 8222
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P33 (0x2000+31): Parameter 32 Main valve manual opening for
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P33 roh"
+    id: praw_8223
+    register_type: holding
+    address: 8223
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P34 (0x2000+32): Parameter 33 Main valve manual opening for
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P34 roh"
+    id: praw_8224
+    register_type: holding
+    address: 8224
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P35 (0x2000+33): DHW mode, compressor working upper limit
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P35 roh"
+    id: praw_8225
+    register_type: holding
+    address: 8225
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P36 (0x2000+34): Interval time between compressor and E1
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P36 roh"
+    id: praw_8226
+    register_type: holding
+    address: 8226
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P37 (0x2000+35): Heating mode, DC fan speed variable
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P37 roh"
+    id: praw_8227
+    register_type: holding
+    address: 8227
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P38 (0x2000+36): Cooling mode, DC fan speed variable
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P38 roh"
+    id: praw_8228
+    register_type: holding
+    address: 8228
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P39 (0x2000+37): Inverter compressor model setting (reserved)
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P39 roh"
+    id: praw_8229
+    register_type: holding
+    address: 8229
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P40 (0x2000+38): P38 Running set frequency function
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P40 roh"
+    id: praw_8230
+    register_type: holding
+    address: 8230
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+
+
+
+
+  # P45 (0x2000+43): Compressor maximum frequency
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P45 roh"
+    id: praw_8235
+    register_type: holding
+    address: 8235
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P46 (0x2000+44): Compressor minimum frequency
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P46 roh"
+    id: praw_8236
+    register_type: holding
+    address: 8236
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P47 (0x2000+45): Compressor defrost frequency
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P47 roh"
+    id: praw_8237
+    register_type: holding
+    address: 8237
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P48 (0x2000+46): DHW maximum frequency
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P48 roh"
+    id: praw_8238
+    register_type: holding
+    address: 8238
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P49 (0x2000+47): Exhaust overheat proportional coefficient
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P49 roh"
+    id: praw_8239
+    register_type: holding
+    address: 8239
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P50 (0x2000+48): Exhaust overheat differential coefficient
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P50 roh"
+    id: praw_8240
+    register_type: holding
+    address: 8240
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P51 (0x2000+49): High pressure prohibit boost pressure
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P51 roh"
+    id: praw_8241
+    register_type: holding
+    address: 8241
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P52 (0x2000+50): High pressure cancel prohibits boost pressure
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P52 roh"
+    id: praw_8242
+    register_type: holding
+    address: 8242
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P53 (0x2000+51): High voltage protection set point
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P53 roh"
+    id: praw_8243
+    register_type: holding
+    address: 8243
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P54 (0x2000+52): Low voltage protection set point
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P54 roh"
+    id: praw_8244
+    register_type: holding
+    address: 8244
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P55 (0x2000+53): High pressure protection release hysteresis
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P55 roh"
+    id: praw_8245
+    register_type: holding
+    address: 8245
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P56 (0x2000+54): Low pressure protection release hysteresis
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P56 roh"
+    id: praw_8246
+    register_type: holding
+    address: 8246
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P57 (0x2000+55): Exhaust temperature protection point
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P57 roh"
+    id: praw_8247
+    register_type: holding
+    address: 8247
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P58 (0x2000+56): C1 water pump speed regulation temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P58 roh"
+    id: praw_8248
+    register_type: holding
+    address: 8248
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P59 (0x2000+57): PWM water pump minimum speed
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P59 roh"
+    id: praw_8249
+    register_type: holding
+    address: 8249
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+
+  # P61 (0x2000+59): Minimum water flow
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P61 roh"
+    id: praw_8251
+    register_type: holding
+    address: 8251
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P62 (0x2000+60): A/C function selection
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P62 roh"
+    id: praw_8252
+    register_type: holding
+    address: 8252
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P63 (0x2000+61): DHW function selection
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P63 roh"
+    id: praw_8253
+    register_type: holding
+    address: 8253
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P64 (0x2000+62): Minimum opening of expansion valve
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P64 roh"
+    id: praw_8254
+    register_type: holding
+    address: 8254
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P65 (0x2000+63): Water pump C2 function definition
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P65 roh"
+    id: praw_8255
+    register_type: holding
+    address: 8255
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P66 (0x2000+64): Water source air cooling option
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P66 roh"
+    id: praw_8256
+    register_type: holding
+    address: 8256
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P67 (0x2000+65): Indoor temperature controller (reserved)
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P67 roh"
+    id: praw_8257
+    register_type: holding
+    address: 8257
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P68 (0x2000+66): Water flow switch type selection
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P68 roh"
+    id: praw_8258
+    register_type: holding
+    address: 8258
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P69 (0x2000+67): Type of fan
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P69 roh"
+    id: praw_8259
+    register_type: holding
+    address: 8259
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P70 (0x2000+68): Power-down memory function
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P70 roh"
+    id: praw_8260
+    register_type: holding
+    address: 8260
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P71 (0x2000+69): P71 DC fan speed control
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P71 roh"
+    id: praw_8261
+    register_type: holding
+    address: 8261
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P72 (0x2000+70): P72 DC fan manual speed
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P72 roh"
+    id: praw_8262
+    register_type: holding
+    address: 8262
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P73 (0x2000+71): Pressure sensor enable
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P73 roh"
+    id: praw_8263
+    register_type: holding
+    address: 8263
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P74 (0x2000+72): Enthalpy injection valve control mode
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P74 roh"
+    id: praw_8264
+    register_type: holding
+    address: 8264
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P75 (0x2000+73): EVI valve initial opening (manual opening)
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P75 roh"
+    id: praw_8265
+    register_type: holding
+    address: 8265
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P76 (0x2000+74): EVI valve initial opening (manual opening)
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P76 roh"
+    id: praw_8266
+    register_type: holding
+    address: 8266
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P77 (0x2000+75): Spray enthalpy valve superheat (heating)
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P77 roh"
+    id: praw_8267
+    register_type: holding
+    address: 8267
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P78 (0x2000+76): Spray enthalpy valve superheat (cooling)
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P78 roh"
+    id: praw_8268
+    register_type: holding
+    address: 8268
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P79 (0x2000+77): WIFI data upload cycle
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P79 roh"
+    id: praw_8269
+    register_type: holding
+    address: 8269
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P80 (0x2000+78): Calculate the minimum operating frequency of
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P80 roh"
+    id: praw_8270
+    register_type: holding
+    address: 8270
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P81 (0x2000+79): E1/E2 function mode definition
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P81 roh"
+    id: praw_8271
+    register_type: holding
+    address: 8271
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P82 (0x2000+80): Second heat source starting
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P82 roh"
+    id: praw_8272
+    register_type: holding
+    address: 8272
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P83 (0x2000+81): Hot water circulation pump working
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P83 roh"
+    id: praw_8273
+    register_type: holding
+    address: 8273
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P84 (0x2000+82): Hot water circulating pump opening
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P84 roh"
+    id: praw_8274
+    register_type: holding
+    address: 8274
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+
+  # P86 (0x2000+84): Defrost environment and coil temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P86 roh"
+    id: praw_8276
+    register_type: holding
+    address: 8276
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P87 (0x2000+85): Restore factory settings (effective in shutdown
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P87 roh"
+    id: praw_8277
+    register_type: holding
+    address: 8277
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P88 (0x2000+86): C3 water pump function selection
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P88 roh"
+    id: praw_8278
+    register_type: holding
+    address: 8278
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P89 (0x2000+87): Return air superheat ratio coefficient
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P89 roh"
+    id: praw_8279
+    register_type: holding
+    address: 8279
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P90 (0x2000+88): Return air superheat differential coefficient
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P90 roh"
+    id: praw_8280
+    register_type: holding
+    address: 8280
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P91 (0x2000+89): Defrost environment and coil temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P91 roh"
+    id: praw_8281
+    register_type: holding
+    address: 8281
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P92 (0x2000+90): Heating return air target superheat（ Ambient
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P92 roh"
+    id: praw_8282
+    register_type: holding
+    address: 8282
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P93 (0x2000+91): Heating return air target superheat degree（ -
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P93 roh"
+    id: praw_8283
+    register_type: holding
+    address: 8283
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P94 (0x2000+92): Heating return air target superheat （
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P94 roh"
+    id: praw_8284
+    register_type: holding
+    address: 8284
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P95 (0x2000+93): Cooling return air target superheat
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P95 roh"
+    id: praw_8285
+    register_type: holding
+    address: 8285
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P96 (0x2000+94): Heating return air target superheat degree (45
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P96 roh"
+    id: praw_8286
+    register_type: holding
+    address: 8286
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P97 (0x2000+95): Parameter 96
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P97 roh"
+    id: praw_8287
+    register_type: holding
+    address: 8287
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P98 (0x2000+96): Inversion of the control signal for the G1 valve
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P98 roh"
+    id: praw_8288
+    register_type: holding
+    address: 8288
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P99 (0x2000+97): Inversion of the control signal for the G2 valve
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P99 roh"
+    id: praw_8289
+    register_type: holding
+    address: 8289
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P100 (0x2000+98): Inversion of the control signal for the G3 valve
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P100 roh"
+    id: praw_8290
+    register_type: holding
+    address: 8290
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P101 (0x2000+99): EEV steps for defrosting
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P101 roh"
+    id: praw_8291
+    register_type: holding
+    address: 8291
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+
+  # P103 (0x2000+101): EEV initial opening hold time
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P103 roh"
+    id: praw_8293
+    register_type: holding
+    address: 8293
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P104 (0x2000+102): Initial compressor frequency for AC
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P104 roh"
+    id: praw_8294
+    register_type: holding
+    address: 8294
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P107 (0x2000+103): PRt calculation valume
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P107 roh"
+    id: praw_8295
+    register_type: holding
+    address: 8295
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P108 (0x2000+104): R485 monitoring address
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P108 roh"
+    id: praw_8296
+    register_type: holding
+    address: 8296
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P109 (0x2000+105): Discharge temp. value 1 to limit compressor
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P109 roh"
+    id: praw_8297
+    register_type: holding
+    address: 8297
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P110 (0x2000+106): Discharge temp. value 2 to limit compressor
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P110 roh"
+    id: praw_8298
+    register_type: holding
+    address: 8298
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P111 (0x2000+107): Discharge temp. value 3 to limit compressor
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P111 roh"
+    id: praw_8299
+    register_type: holding
+    address: 8299
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P112 (0x2000+108): EEV adjustment temp. when discharge temp.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P112 roh"
+    id: praw_8300
+    register_type: holding
+    address: 8300
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P113 (0x2000+109): EEV adjustment time when discharge temp. is
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P113 roh"
+    id: praw_8301
+    register_type: holding
+    address: 8301
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P114 (0x2000+110): Compressor frequency reduction percentage
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P114 roh"
+    id: praw_8302
+    register_type: holding
+    address: 8302
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P115 (0x2000+111): Outlet temp. too high protection value
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P115 roh"
+    id: praw_8303
+    register_type: holding
+    address: 8303
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P116 (0x2000+112): Electrical auxiliary heat calculation switch
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P116 roh"
+    id: praw_8304
+    register_type: holding
+    address: 8304
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P117 (0x2000+113): E0 electric heating power
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P117 roh"
+    id: praw_8305
+    register_type: holding
+    address: 8305
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P118 (0x2000+114): E1 electric heating power
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P118 roh"
+    id: praw_8306
+    register_type: holding
+    address: 8306
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P119 (0x2000+115): E2 electric heating power
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P119 roh"
+    id: praw_8307
+    register_type: holding
+    address: 8307
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P120 (0x2000+116): reserve
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P120 roh"
+    id: praw_8308
+    register_type: holding
+    address: 8308
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # Reg8309 (0x2000+117): in der Tabelle nicht benannt
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM Reg8309 roh"
+    id: praw_8309
+    register_type: holding
+    address: 8309
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # Reg8310 (0x2000+118): in der Tabelle nicht benannt
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM Reg8310 roh"
+    id: praw_8310
+    register_type: holding
+    address: 8310
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P121 (0x2000+119): PV activation
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P121 roh"
+    id: praw_8311
+    register_type: holding
+    address: 8311
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P122 (0x2000+120): floor drying program
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P122 roh"
+    id: praw_8312
+    register_type: holding
+    address: 8312
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P123 (0x2000+121): 1st period
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P123 roh"
+    id: praw_8313
+    register_type: holding
+    address: 8313
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P124 (0x2000+122): 1st period start temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P124 roh"
+    id: praw_8314
+    register_type: holding
+    address: 8314
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P125 (0x2000+123): 1st period end temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P125 roh"
+    id: praw_8315
+    register_type: holding
+    address: 8315
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P126 (0x2000+124): 2nd period
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P126 roh"
+    id: praw_8316
+    register_type: holding
+    address: 8316
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P127 (0x2000+125): 2nd period start temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P127 roh"
+    id: praw_8317
+    register_type: holding
+    address: 8317
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P128 (0x2000+126): 2nd period end temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P128 roh"
+    id: praw_8318
+    register_type: holding
+    address: 8318
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P129 (0x2000+127): 3rd period
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P129 roh"
+    id: praw_8319
+    register_type: holding
+    address: 8319
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P130 (0x2000+128): 3rd period start temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P130 roh"
+    id: praw_8320
+    register_type: holding
+    address: 8320
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P131 (0x2000+129): 3rd period end temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P131 roh"
+    id: praw_8321
+    register_type: holding
+    address: 8321
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P132 (0x2000+130): 4th period
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P132 roh"
+    id: praw_8322
+    register_type: holding
+    address: 8322
+    force_new_range: true
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P133 (0x2000+131): 4th period start temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P133 roh"
+    id: praw_8323
+    register_type: holding
+    address: 8323
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P134 (0x2000+132): 4th period end temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P134 roh"
+    id: praw_8324
+    register_type: holding
+    address: 8324
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P135 (0x2000+133): AU heating limiting temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P135 roh"
+    id: praw_8325
+    register_type: holding
+    address: 8325
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+  # P136 (0x2000+134): AU heating recovery temperature
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PARAM P136 roh"
+    id: praw_8326
+    register_type: holding
+    address: 8326
+    skip_updates: 6
+    value_type: S_WORD
+    entity_category: diagnostic
+
+# ============================================================================
+# ENDE VOLLAUSLESUNG PARAMETERBLOCK 0x2000
+# ============================================================================
+
+# -------------------- Sollwerte lesen (0x1000) --------------------
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Vorlauf Solltemperatur Istwert"
+    id: heating_setpoint_read
+    register_type: holding
+    address: 4098
+    value_type: U_WORD
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+
+# -------------------- Binaerzustaende --------------------
+binary_sensor:
+
+  # C49 (Adresse 4609): 0 = Normalbetrieb, 1 = Oelrueckfuehrung laeuft.
+  # Kein skip_updates: Der Vorgang dauert nur wenige Minuten, bei den 10 s des
+  # Controllers wird er sicher erfasst. Damit laesst sich beobachten, wie oft und
+  # wie lange die Avarma Oel zurueckholt - und spaeter der Kompressor-Deckel
+  # gezielt nur waehrend dieser Phasen anheben, statt ihn dauerhaft hoch zu halten.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Oelrueckfuehrung aktiv"
+    id: oil_return_active
+    register_type: holding
+    address: 4609
+    bitmask: 0x1
+
+  # Register 6666 (0x1A00+10) "Forbid Defrosting enabled" aus dem Override-Block
+  # der Avarma - demselben Block, in dem sich auch Kompressorfrequenz, Luefter und
+  # Expansionsventil zwangsweise vorgeben lassen. Steht das Flag auf 1, taut die
+  # Anlage ueberhaupt nicht mehr ab. Wird hier nur beobachtet, nicht geschrieben:
+  # wenn es je auf 1 steht, ist das die Erklaerung und kein Regelthema.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtauung gesperrt"
+    id: forbid_defrost
+    register_type: holding
+    address: 6666
+    skip_updates: 30
+    bitmask: 0x1
+    entity_category: diagnostic
+
+# -------------------- Steuerung: Sollwerte & Parameter schreiben --------------------
+number:
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Vorlauf Solltemperatur"
+    id: heating_setpoint
+    register_type: holding
+    address: 4098
+    value_type: U_WORD
+    unit_of_measurement: "°C"
+    device_class: temperature
+    min_value: 10
+    max_value: 75
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kühlbetrieb Solltemperatur"
+    id: cooling_setpoint
+    register_type: holding
+    address: 4099
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    unit_of_measurement: "°C"
+    device_class: temperature
+    min_value: 7
+    max_value: 25
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Maximalfrequenz"
+    id: compressor_max_freq
+    register_type: holding
+    address: 8235
+    value_type: U_WORD
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    min_value: 50
+    max_value: 120
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Kompressor Minimalfrequenz"
+    id: compressor_min_freq
+    register_type: holding
+    address: 8236
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    min_value: 0
+    max_value: 90
+    step: 1
+
+  # P114 - "Compressor frequency reduction percentage after set temp. reached":
+  # wie weit der Kompressor seine Frequenz zurueckfahren DARF, sobald die
+  # Vorlauf-Solltemperatur erreicht ist. Bereich 0~60 %, Werkseinstellung 2 %.
+  #
+  # Richtung (der Betreiber, 2026-08-24 - anders herum, als die englische Formulierung
+  # nahelegt): Der Wert ist ein Modulations-SPIELRAUM, keine Abschalt-Aggressivitaet.
+  #   kleiner Wert  = der Kompressor darf kaum heruntermodulieren. Trifft er die
+  #                   kleine Last damit nicht, laeuft der Vorlauf ueber den Sollwert
+  #                   und dem Regler bleibt nur das Abschalten -> die Anlage taktet.
+  #   grosser Wert  = breiterer Modulationsbereich, der Kompressor tastet sich an
+  #                   den VL-Soll heran und laeuft durch.
+  # Bei den hier abgelesenen 3 % steht die Anlage also am taktfreudigen Ende.
+  #
+  # Keine Skalierung ("actual value"), deshalb kein multiply.
+  #
+  # Korrigiert 2026-08-24: stand vorher auf 8303. Das ist laut Hofman-Tabelle
+  # aber P115 "Outlet temp. too high protection value" (70~90 °C) - der
+  # Uebertemperatur-Schutz des Vorlaufs, nicht die Frequenzruecknahme. Die
+  # Entity las entsprechend 83, ein Wert, den P114 gar nicht annehmen kann.
+  # Gefaehrlich war dabei nicht das Lesen, sondern das Schreiben: mit
+  # min_value 0 / max_value 60 haette ein Zug am Regler den Schutz von 83 °C
+  # auf einen einstelligen Wert gesetzt und die Anlage in Dauerstoerung
+  # geschickt. Der Wert stand unveraendert auf 83, es wurde also nie
+  # geschrieben. Dieselbe Adressspalten-Falle wie bei Fehlercode 4389/4390:
+  # "Decimal" ist die echte Modbus-Adresse, "Decimal+1" nur die Panel-Anzeige.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Frequenzreduktion bei VL-Soll erreicht"
+    id: freq_reduction_at_setpoint
+    register_type: holding
+    address: 8302
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 60
+    step: 1
+
+  # P63 - Warmwasserfunktion: 0=deaktiviert, 1=aktiv
+  # Auf 0 setzen wenn kein Warmwasserspeicher vorhanden!
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Warmwasserfunktion"
+    id: dhw_function
+    register_type: holding
+    address: 8253
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    min_value: 0
+    max_value: 1
+    step: 1
+
+  # P87 (Register 8277, Werkseinstellungen zurücksetzen) bewusst NICHT als Entity
+  # angelegt - 2026-08-18 entfernt. Ein versehentlicher Klick in der HA-Oberfläche
+  # würde die komplette Reglerparametrierung der Anlage verwerfen; der Nutzen einer
+  # Fernbedienbarkeit steht in keinem Verhältnis dazu. Im Servicefall über das
+  # Bedienpanel der Wärmepumpe auslösen.
+
+  # P72 - Lüfter manuelle Solldrehzahl (nur wirksam wenn P71 = Manuell)
+  # Register speichert RPM/10 (Hofman-Doku: "display value*10"), empirisch bestätigt
+  # 2026-07-23: Rohwert 40 geschrieben -> Istwert-Sensor meldete 400 RPM.
+  # multiply beim number-Platform wirkt umgekehrt zum sensor-Platform:
+  # geschriebener Rohwert = Anzeigewert * multiply, Anzeigewert = Rohwert / multiply.
+  # Mit 0.1 zeigt und nimmt die Entity also echte RPM. min/max/step sind ebenfalls
+  # Anzeigewerte, 1500 RPM entspricht damit Rohwert 150.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Lüfter Solldrehzahl (manuell)"
+    id: fan_manual_speed
+    register_type: holding
+    address: 8262
+    value_type: U_WORD
+    unit_of_measurement: "RPM"
+    multiply: 0.1
+    min_value: 0
+    max_value: 1500
+    step: 10
+
+  # P29 - Abtau-Start-Verdampfertemperatur
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtau Start Verdampfertemperatur"
+    id: defrost_start_coil_temp
+    register_type: holding
+    address: 8219
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    multiply: 10
+    min_value: -8
+    max_value: 5
+    step: 0.1
+
+  # P30 - Abtau-Ende-Verdampfertemperatur
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtau Ende Verdampfertemperatur"
+    id: defrost_end_coil_temp
+    register_type: holding
+    address: 8220
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    multiply: 10
+    min_value: 5
+    max_value: 30
+    step: 0.1
+
+  # P61 - Mindestdurchfluss, unterhalb dessen die Anlage E15 "Water flow error"
+  # meldet. Bereich 3~80 L/min, Werkswert dieser Anlage 11 (den Werksreset vom
+  # 25.08.2026 hat er unveraendert ueberstanden).
+  #
+  # WARUM SCHREIBBAR (2026-08-25): E15 tritt seit dem 24.08. bei jedem
+  # Start auf, sobald der Kompressor Leistung aufbaut. Alle anderen Ursachen sind
+  # ausgeschlossen (Werksreset, Kaltstart, Handbetrieb, offene Ventile, Strom- und
+  # Spreizungsgrenzen weit entfernt). Einen echten Durchflussmesswert haben wir
+  # nicht - der als "Durchfluss" gefuehrte Wert ist aus der Pumpendrehzahl
+  # gerechnet (exakt Pumpe * 0,22 ueber den gesamten Bereich).
+  #
+  # Das Absenken auf 9 ist deshalb ein MESSVERFAHREN, keine Reparatur: Laeuft sie
+  # mit 9 durch, liegt der echte Durchfluss zwischen 9 und 11 L/min und die
+  # Behinderung ist gering. Stoert sie weiter, liegt er unter 9.
+  #
+  # ACHTUNG - nicht als Dauereinstellung gedacht: Unterhalb des Herstellerwerts
+  # laeuft die Anlage mit zu wenig Wasser. Kritisch ist das vor allem beim
+  # Abtauen, wo der umgekehrte Kreislauf einem kleinen Wasservolumen Waerme
+  # entzieht und der Plattenwaermetauscher einfrieren kann. Nach dem Test zurueck
+  # auf 11.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Mindestdurchfluss"
+    id: min_water_flow
+    register_type: holding
+    address: 8251
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    unit_of_measurement: "L/min"
+    min_value: 3
+    max_value: 80
+    step: 1
+
+  # P86 - geforderte Differenz Umgebung/Lamelle fuer den Abtaustart (AT >= -7 °C).
+  # Am 24.08.2026 mit 8,0 K ausgelesen; Werkseinstellung laut Hofman-Tabelle 5 K.
+  # Auf 5 K gesenkt, damit die Abtauung frueher zulaessig wird - am 24.08. war
+  # dieses Kriterium zwar nicht der Flaschenhals (es war ab 08:42 erfuellt,
+  # abgetaut wurde erst 09:20), aber ein niedrigerer Wert kostet nichts und
+  # nimmt eine Bedingung aus dem Spiel.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtau Differenz Umgebung-Lamelle"
+    id: defrost_delta_t1
+    register_type: holding
+    address: 8276
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    multiply: 10
+    min_value: 0
+    max_value: 20
+    step: 0.1
+
+  # P91 - dieselbe Differenz, gilt aber bei Aussentemperatur < -7 °C.
+  # Steht ebenfalls auf 8,0 K. Bewusst NICHT mitgeaendert: im echten Frost ist
+  # eine grosse Differenz normal, dort wuerde ein zu kleiner Wert die Anlage in
+  # Dauerabtauung schicken. Schreibbar gemacht, damit im Winter nachjustiert
+  # werden kann, ohne nochmal zu flashen.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtau Differenz Umgebung-Lamelle (kalt)"
+    id: defrost_delta_t2
+    register_type: holding
+    address: 8281
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    multiply: 10
+    min_value: 0
+    max_value: 20
+    step: 0.1
+
+  # P58 - C1 Wasserpumpe Regelungs-Temperaturdifferenz
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "C1 Wasserpumpe Regel-Temperaturdifferenz"
+    id: c1_pump_regulation_diff
+    register_type: holding
+    address: 8248
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    multiply: 10
+    min_value: 3
+    max_value: 8
+    step: 0.1
+
+  # P59 - PWM Wasserpumpe Minimaldrehzahl
+  # Empirisch bestätigt (2026-07-14): Rohwert ist in 10%-Schritten (Rohwert 8 = 80%,
+  # passte zum damaligen Ist-Wert von "C1 Wasserpumpenleistung"). multiply: 0.1, da bei
+  # number.modbus_controller Anzeigewert = Rohwert / multiply gilt (invertierte Logik ggü. sensor-Filtern).
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "PWM Wasserpumpe Minimaldrehzahl"
+    id: pwm_pump_min_speed
+    register_type: holding
+    address: 8249
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    multiply: 0.1
+    min_value: 20
+    max_value: 80
+    step: 10
+
+  # Agent-Heartbeat: rein virtuell, kein Modbus-Register. AppDaemon schreibt hier
+  # periodisch den aktuellen Unix-Timestamp rein, solange es aktiv VLT/Kompressor
+  # steuert. Jeder Schreibvorgang aktualisiert den Watchdog-Zeitstempel unten.
+  - platform: template
+    name: "Agent Heartbeat"
+    id: agent_heartbeat
+    unit_of_measurement: "s"
+    min_value: 0
+    max_value: 9999999999
+    step: 1
+    optimistic: true
+    on_value:
+      then:
+        - globals.set:
+            id: letzter_heartbeat_millis
+            value: !lambda 'return millis();'
+        - globals.set:
+            id: agent_hat_kontrolle
+            value: 'true'
+
+# -------------------- Agent-Heartbeat: Watchdog --------------------
+# Bleibt der Heartbeat >30 Min aus, waehrend der Agent zuvor aktiv war,
+# fallen VLT und Kompressor-Maximalfrequenz auf konservative Sicherheitswerte
+# zurueck (aktuell bewaehrte Werte: 32°C / 90 Hz).
+interval:
+  - interval: 60s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return id(agent_hat_kontrolle) &&
+                (millis() - id(letzter_heartbeat_millis) > 1800000);
+          then:
+            - logger.log: "Agent-Heartbeat seit >30 Min ausgeblieben - Fallback auf konservative Sicherheitswerte"
+            - number.set:
+                id: heating_setpoint
+                value: 32
+            - number.set:
+                id: compressor_max_freq
+                value: 90
+            - globals.set:
+                id: agent_hat_kontrolle
+                value: 'false'
+
+# -------------------- Steuerung: Ein/Aus --------------------
+switch:
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Wärmepumpe Ein-Aus"
+    id: heatpump_onoff
+    register_type: holding
+    address: 4096
+    restore_mode: DISABLED
+
+# -------------------- Notknopf: Abtauung von Hand --------------------
+# Register 4103 (0x1000+7) "Forced Defrosting" liegt im Steuerblock, direkt neben
+# Ein/Aus und den Solltemperaturen - also der Live-Befehlsweg, nicht der
+# Parameterblock. Deshalb dieser statt P28 (Reg 8218, select "Abtaumodus"):
+#   1 = Abtauung sofort starten
+#   0 = laufende Abtauung abbrechen
+# Der Regler setzt das Register nach der Abtauung selbst auf 0 zurueck; der
+# Schalter faellt beim naechsten Lesezyklus also von allein wieder auf "aus".
+#
+# restore_mode: DISABLED ist hier Absicht: nach einem Reboot des ESP darf auf
+# keinen Fall automatisch eine Abtauung ausgeloest werden.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtauung erzwingen"
+    id: forced_defrost
+    register_type: holding
+    address: 4103
+    restore_mode: DISABLED
+
+# -------------------- Steuerung: Betriebsmodus --------------------
+select:
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Betriebsmodus Wahl"
+    id: mode_select
+    address: 4097
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    optionsmap:
+      "Heizen": 2
+      "Kühlen": 4
+
+  # P71 - Lüftersteuerung: Manuell = Register 8262 (P72) wird verwendet
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Lüftersteuerung Modus"
+    id: fan_control_mode
+    address: 8261
+    value_type: U_WORD
+    optionsmap:
+      "Manuell": 0
+      "Automatisch": 1
+
+  # P87 - Werksreset (2026-08-25).
+  #
+  # Bewusst ein select und kein switch: Ein Schalter laesst sich mit einem
+  # Fehltipper ausloesen, hier muss man einen Eintrag bewusst auswaehlen.
+  #
+  # Wirkt laut Hofman-Tabelle NUR im ausgeschalteten Zustand ("effective in
+  # shutdown state"). Die WP muss also aus sein, sonst passiert nichts.
+  #
+  # Vor dem Ausloesen: Parameterblock sichern. Der Sensorblock "VOLLAUSLESUNG
+  # PARAMETERBLOCK 0x2000" weiter oben liest alle Register roh aus.
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Werksreset ausloesen"
+    id: factory_reset
+    address: 8277
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    optionsmap:
+      "Normalbetrieb": 0
+      "WERKSRESET": 1
+
+  # P28 - Abtaumodus (setzt sich nach erzwungenem Abtauen automatisch auf 0 zurück)
+  - platform: modbus_controller
+    modbus_controller_id: modbus_device
+    name: "Abtaumodus"
+    id: defrost_mode
+    address: 8218
+    skip_updates: 30  # Konfigurationsregister: alle 5 min statt alle 10 s
+    value_type: U_WORD
+    optionsmap:
+      "Automatisch": 0
+      "Erzwungen": 1
