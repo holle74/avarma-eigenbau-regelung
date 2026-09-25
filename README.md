@@ -48,9 +48,11 @@ Anlegen über *Einstellungen → Geräte & Dienste → Helfer*.
 |---|---|---|
 | `input_boolean.wp_autostart_aktiv` | Schalter | Erlaubt der Regelung, die WP selbst einzuschalten |
 | `input_boolean.wp_heizgrenze_aktiv` | Schalter | Erlaubt alle automatischen Abschaltungen (Heizgrenze, Takten, Raum warm, Nacht) |
-| `input_number.wp_heizkurve_offset` | Zahl, −3…+3, Schritt 0,5 °C | Parallelverschiebung der Heizkurve, wird von der Regelung angepasst |
+| `input_boolean.wp_uebergangsmodus` | Schalter | Lastverteilung im Übergangsmodus: nur das Wohnzimmer gibt ab (siehe Beitrag 3.7) |
+| `input_number.wp_heizkurve_offset` | Zahl, −3…+3, Schritt 0,5 °C | Parallelverschiebung der Heizkurve, wird von der Regelung angepasst (nicht in der Übergangszeit) |
+| `input_number.wp_einschaltzeit` | Zahl, 0…4102444800, Schritt 1 s | Einschaltzeitpunkt der WP als Unix-Zeit, übersteht HA-Neustarts (0 = unbekannt) |
 | `input_number.wp_prognose_aussentemperatur_minimum_24h` | Zahl, −30…40, Schritt 0,1 °C | Minimum der 24-h-Prognose, befüllt von der Automation |
-| `input_number.wp_spender_<raum>_original_soll` (4×) | Zahl, −1…30, Schritt 0,5 °C | Gesicherte Original-Sollwerte der Spender-Räume (−1 = nicht gedrosselt) |
+| `input_number.wp_spender_<raum>_original_soll` (5×: Schlafzimmer, Keller, Flur, Yoga, Wohnzimmer) | Zahl, −1…30, Schritt 0,5 °C | Gesicherte Original-Sollwerte der Spender-Räume (−1 = nicht gedrosselt) |
 | `input_datetime.wp_taktsperre_bis` | Datum + Uhrzeit | Ende der Sperre nach einer Takt-Abschaltung |
 | `sensor.aussentemperatur_avarma_korrigiert` | Template | Externer Außenfühler, ggf. kalibriert |
 | `sensor.wp_aussentemperatur_mittel_3h` | Statistik (mean, max_age 3 h) | Grundlage der Heizgrenze |

@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta, timezone
 
 from appdaemon.plugins.hass.hassapi import Hass
@@ -5,6 +6,9 @@ from appdaemon.plugins.hass.hassapi import Hass
 # -------------------- Entities --------------------
 BAD_CLIMATE = "climate.raumtemperaturregler_bad_unten_bad"
 WP_SWITCH = "switch.esphome_web_avarma_warmepumpe_ein_aus"
+# Einschaltzeitpunkt der WP als Unix-Zeit. Ueberlebt einen HA-Neustart, anders
+# als last_changed des Schalters - siehe wp_laufzeit_minuten().
+WP_EINSCHALTZEIT_HELPER = "input_number.wp_einschaltzeit"
 AT_SENSOR = "sensor.aussentemperatur_avarma_korrigiert"
 # 3-h-Mittel derselben Aussentemperatur, statistics-Helfer (2026-09-12).
 # Bezugsgroesse der Heizgrenzen-Abschaltung, siehe AUSSCHALT_* weiter unten.
@@ -119,6 +123,17 @@ KORREKTUR_MAX_C = 3.0
 # werden sofort geschrieben.
 VLT_WRITE_INTERVAL_MINUTES = 10
 VLT_SOFORT_AB_K = 3.0
+# Absenken ohne Kompressorstopp (Auswertung 25.09.2026): Liegt der Vorlauf nach einer
+# Absenkung 1,0 K oder mehr ueber dem neuen Sollwert, stoppt die Avarma sofort - 10 der 13
+# Kompressorstopps vom 17.-24.09. kamen so zustande (VL-Ist >= neues Soll + 1,0: 10 von 12
+# Absenkungen mit Stopp, darunter 0 von 10). P2 geht nur in ganzen Grad. Bei laufendem
+# Kompressor wird deshalb nur so weit abgesenkt, dass der Vorlauf hoechstens
+# VLT_ABSENK_MAX_UEBER_K darueber liegt. Sitzt er genau auf dem Sollwert, geht nicht einmal
+# 1 K - dann wird gewartet, bis er von selbst etwas faellt, und nach
+# VLT_ABSENK_WARTEN_MAX_MINUTES trotzdem um 1 K gesenkt. Diesen Stopp zaehlt die
+# Takterkennung nicht (TAKT_EIGENE_ABSENKUNG_MINUTES).
+VLT_ABSENK_MAX_UEBER_K = 0.8
+VLT_ABSENK_WARTEN_MAX_MINUTES = 30
 
 # -------------------- Ruecklauf-Heizkurve (2026-07-24) --------------------
 # Zwei Erfahrungswerte aus vergangenen Heizperioden spannen eine lineare Kurve auf:
@@ -484,6 +499,20 @@ TAKT_STARTS = 2
 TAKT_FENSTER_MINUTES = 45
 TAKT_SPERRE_MINUTES = 180
 TAKT_ABTAU_NACHLAUF_MINUTES = 10
+# Ebenfalls nicht gezaehlt (Auswertung 25.09.2026): Stopps, die die Anlage nicht aus
+# Ueberleistung macht. Alle drei Taktabschaltungen vom 18., 20. und 21.09. enthielten
+# mindestens einen davon.
+# - bis TAKT_EIGENE_ABSENKUNG_MINUTES nach einer eigenen VL-Soll-Absenkung
+#   (siehe VLT_ABSENK_*)
+# - nach der Oelrueckfuehrung: nach laengerem Lauf springt der Kompressor fuer unter
+#   einer Minute auf P41 (50 Hz), der Vorlauf schiesst ueber den Sollwert, die Avarma
+#   stoppt (20.09. 18:32, 21.09. 17:07, 22.09. 18:11). Erkannt am Sprung auf
+#   >= OELRUECKFUEHRUNG_FREQ_HZ - 1 mit Stopp binnen TAKT_OEL_SPRUNG_MINUTES; der
+#   Kompressor muss vorher TAKT_OEL_VORLAUF_MINUTES gelaufen sein, sonst ist es die
+#   Anfahrrampe.
+TAKT_EIGENE_ABSENKUNG_MINUTES = 5
+TAKT_OEL_SPRUNG_MINUTES = 3
+TAKT_OEL_VORLAUF_MINUTES = 10
 KOMPRESSOR_LAEUFT_HZ = 1.0
 
 CHECK_INTERVAL_SECONDS = 300
@@ -554,8 +583,18 @@ class HeizungVltKompressorRegelung(Hass):
         self.vereist_seit = None
         self.korrektur = 0.0
         self.kompressor_starts = []
+        # Takterkennung: Gruende fuer einen nicht gezaehlten Stopp (TAKT_EIGENE_*,
+        # TAKT_OEL_*). Nach einem Reload unbekannt - dann zaehlt der Stopp.
+        self.kompressor_an_seit = None
+        self.oel_sprung_um = None
+        self.stopp_grund = None
+        self.vlt_abgesenkt_um = None
+        self.absenkung_wartet_seit = None
         self.eg_warm_seit = None
         self.listen_state(self.on_kompressor_frequenz, KOMPRESSOR_IST_SENSOR)
+        # Am Schalter statt an den Schaltstellen: so stimmt der Helfer auch,
+        # wenn jemand die WP von Hand oder eine Automation sie schaltet.
+        self.listen_state(self.on_wp_schalter, WP_SWITCH)
         self.run_in(self.check, 5)
         self.run_every(
             self.check,
@@ -601,9 +640,37 @@ class HeizungVltKompressorRegelung(Hass):
                 return False
         return True
 
+    def on_wp_schalter(self, entity, attribute, old, new, **kwargs):
+        """Einschaltzeitpunkt festhalten bzw. beim Abschalten loeschen."""
+        if new == old:
+            return
+        if new == "on":
+            jetzt = int(datetime.now(timezone.utc).timestamp())
+            self.call_service(
+                "input_number/set_value", entity_id=WP_EINSCHALTZEIT_HELPER, value=jetzt
+            )
+            self.log("WP eingeschaltet - Einschaltzeit im Helfer festgehalten", level="INFO")
+        elif new == "off":
+            self.call_service(
+                "input_number/set_value", entity_id=WP_EINSCHALTZEIT_HELPER, value=0
+            )
+
     def wp_laufzeit_minuten(self):
-        """Wie lange laeuft die WP schon? Aus last_changed des Schalters, nicht aus
-        eigenem Zustand - damit ein App-Reload nicht als Kaltstart durchgeht."""
+        """Wie lange laeuft die WP schon?
+
+        Primaerquelle ist WP_EINSCHALTZEIT_HELPER, gesetzt von on_wp_schalter().
+        Ein input_number ueberlebt einen Neustart von Home Assistant, last_changed
+        des Schalters nicht: dabei wird es auf die Neustartzeit gesetzt, und eine
+        seit Stunden laufende WP sieht aus wie gerade eingeschaltet. Beobachtet am
+        17.09.2026 - nach einem HAOS-Neustart um 12:00 fiel das RL-Ziel mitten im
+        Betrieb auf den Kaltstartwert zurueck und brauchte 45 min zurueck auf Kurs.
+
+        Fallback bleibt last_changed, damit die Regelung auch ohne gesetzten Helfer
+        arbeitet (Wert 0 = kein Einschaltzeitpunkt bekannt).
+        """
+        stempel = self.safe_float(WP_EINSCHALTZEIT_HELPER)
+        if stempel is not None and stempel > 0:
+            return (datetime.now(timezone.utc).timestamp() - stempel) / 60
         seit = self.get_state(WP_SWITCH, attribute="last_changed")
         if not seit:
             return None
@@ -672,25 +739,71 @@ class HeizungVltKompressorRegelung(Hass):
         return max(0.0, (bis - datetime.now(timezone.utc).timestamp()) / 60)
 
     def on_kompressor_frequenz(self, entity, attribute, old, new, **kwargs):
-        """Zaehlt Kompressorstarts (steht -> laeuft) fuer die Takterkennung."""
+        """Zaehlt Kompressorstarts (steht -> laeuft) fuer die Takterkennung. Bei jedem
+        Stopp wird festgehalten, ob er zaehlt - der Start danach richtet sich danach."""
         try:
             alt = float(old)
             neu = float(new)
         except (TypeError, ValueError):
             return
+        now = self.datetime()
+        if alt >= KOMPRESSOR_LAEUFT_HZ > neu:
+            self.on_kompressor_stopp(now, alt)
+            return
+        if KOMPRESSOR_LAEUFT_HZ <= alt < OELRUECKFUEHRUNG_FREQ_HZ - 1 <= neu:
+            self.oel_sprung_um = now
+            return
         if not (alt < KOMPRESSOR_LAEUFT_HZ <= neu):
             return
+        self.kompressor_an_seit = now
+        self.oel_sprung_um = None
+        stopp_grund, self.stopp_grund = self.stopp_grund, None
         if self.get_state(WP_SWITCH) != "on" or self.abtauen_aktiv():
             return
-        now = self.datetime()
         if self.abtau_zuletzt is not None:
             if (now - self.abtau_zuletzt).total_seconds() / 60 < TAKT_ABTAU_NACHLAUF_MINUTES:
                 return
+        if stopp_grund is not None:
+            self.log(
+                f"Kompressorstart ({neu:.0f} Hz) zaehlt nicht fuer die Takterkennung - "
+                f"Stopp davor {stopp_grund}",
+                level="INFO",
+            )
+            return
         self.kompressor_starts.append(now)
         self.takt_erkannt()  # raeumt alte Starts weg, damit die Zahl im Log stimmt
         self.log(
             f"Kompressorstart ({neu:.0f} Hz) - {len(self.kompressor_starts)} Start(s) in "
             f"den letzten {TAKT_FENSTER_MINUTES} min",
+            level="INFO",
+        )
+
+    def on_kompressor_stopp(self, now, alt):
+        """Merkt sich, ob die Regelung den Stopp selbst verursacht hat (TAKT_EIGENE_*,
+        TAKT_OEL_*). Das Log dient zugleich der naechsten Auswertung."""
+        def minuten_seit(zeitpunkt):
+            return (now - zeitpunkt).total_seconds() / 60
+
+        self.stopp_grund = None
+        if self.get_state(WP_SWITCH) != "on":
+            return
+        if (
+            self.vlt_abgesenkt_um is not None
+            and minuten_seit(self.vlt_abgesenkt_um) <= TAKT_EIGENE_ABSENKUNG_MINUTES
+        ):
+            self.stopp_grund = "durch eigene VL-Soll-Absenkung"
+        elif (
+            self.oel_sprung_um is not None
+            and self.kompressor_an_seit is not None
+            and minuten_seit(self.oel_sprung_um) <= TAKT_OEL_SPRUNG_MINUTES
+            and (self.oel_sprung_um - self.kompressor_an_seit).total_seconds() / 60
+            >= TAKT_OEL_VORLAUF_MINUTES
+        ):
+            self.stopp_grund = "nach Oelrueckfuehrung (Sprung auf 50 Hz)"
+        self.oel_sprung_um = None
+        self.log(
+            f"Kompressorstopp (vorher {alt:.0f} Hz)"
+            + (f" - {self.stopp_grund}, zaehlt nicht fuer die Takterkennung" if self.stopp_grund else ""),
             level="INFO",
         )
 
@@ -773,6 +886,8 @@ class HeizungVltKompressorRegelung(Hass):
             self.rl_ziel_aktuell = None
             self.korrektur = 0.0
             self.kompressor_starts = []
+            self.stopp_grund = None
+            self.absenkung_wartet_seit = None
             return
 
         wp_on = self.get_state(WP_SWITCH) == "on"
@@ -781,6 +896,8 @@ class HeizungVltKompressorRegelung(Hass):
             self.rl_ziel_aktuell = None
             self.korrektur = 0.0
             self.kompressor_starts = []
+            self.stopp_grund = None
+            self.absenkung_wartet_seit = None
             return
 
         if not self.wp_war_an:
@@ -1213,11 +1330,17 @@ class HeizungVltKompressorRegelung(Hass):
         Nur wenn der Kompressor nicht schon am Limit laeuft (sonst ist es ein Kapazitaets-,
         kein Kurvenproblem). Laeuft dauerhaft, kein Lernende (2026-07-24).
 
-        Bezugsgroesse seit 14.09.2026 : In der Uebergangszeit das EG-Mittel gegen
-        EG_AUS_C, sonst wie bisher das Bad gegen bad_target(). Vorher zog das hohe Bad-Ziel
-        (22/23 Grad) die Kurve in der Nacht zum 14.09. zweimal nach oben (1,0 -> 2,0 K),
-        waehrend die Abschaltung gegen 21 Grad im EG prueft - die eine Regel wollte mehr
-        Waerme, die andere wartete auf ein Ziel, das dadurch nur langsam naeher kam."""
+        In der Uebergangszeit ausgesetzt (Auswertung 25.09.2026). Der Versuch vom 14.09.,
+        dort das EG-Mittel gegen EG_AUS_C zu nehmen, war eine Ratsche: Die WP laeuft nur
+        zwischen EG_EIN_C und EG_AUS_C, der erste faellige Schritt kommt meist direkt nach
+        dem Start (der 5-h-Takt laeuft auch bei stehender WP ab) und sieht dann ~20,0 Grad.
+        Absenken koennte er erst ueber 21,3 Grad, da ist die WP laengst aus. Der Offset stieg
+        so vom 17. bis 20.09. von 1,0 auf den Anschlag 3,0, das RL-Ziel auf 32-34 Grad bei
+        11-17 Grad AT. Den Komfort regelt in diesen Monaten ohnehin die EG-Abschaltung; der
+        Offset bestimmt nur, wie heiss dafuer gefahren wird. Ausserhalb der Uebergangszeit
+        wie bisher das Bad gegen bad_target()."""
+        if self.uebergangszeit():
+            return
         now = self.datetime()
         last = self.last_step.get("offset")
         due = last is None or (now - last).total_seconds() >= ADAPT_INTERVAL_MINUTES * 60
@@ -1233,14 +1356,10 @@ class HeizungVltKompressorRegelung(Hass):
             )
             return
 
-        eg = self.safe_float(EG_MITTEL_SENSOR) if self.uebergangszeit() else None
-        if eg is not None:
-            bad_current, target, bezug = eg, EG_AUS_C, "EG-Mittel"
-        else:
-            bad_current = self.safe_float(BAD_CLIMATE, attribute="current_temperature")
-            if bad_current is None:
-                return
-            target, bezug = self.bad_target(), "Bad"
+        bad_current = self.safe_float(BAD_CLIMATE, attribute="current_temperature")
+        if bad_current is None:
+            return
+        target, bezug = self.bad_target(), "Bad"
 
         error = target - bad_current
         offset = self.safe_float(HEIZKURVE_OFFSET_HELPER, default=0.0)
@@ -1280,6 +1399,7 @@ class HeizungVltKompressorRegelung(Hass):
         self.update_korrektur(error, rl_ziel + spreizung + self.korrektur)
         roh = rl_ziel + spreizung + self.korrektur
         ziel = float(round(max(VLT_MIN, min(VLT_MAX, roh))))
+        ziel = self.absenkung_begrenzen(ziel, vlt_soll)
 
         abweichung = abs(ziel - vlt_soll)
         if abweichung >= 1.0 and (
@@ -1288,6 +1408,8 @@ class HeizungVltKompressorRegelung(Hass):
         ):
             self.call_service("number/set_value", entity_id=VLT_SOLL_NUMBER, value=ziel)
             self.last_step["vlt"] = self.datetime()
+            if ziel < vlt_soll:
+                self.vlt_abgesenkt_um = self.datetime()
             self.log(
                 f"VL-Soll {vlt_soll:.0f}->{ziel:.0f}°C (RL-Ziel {rl_ziel:.1f} + Spreizung "
                 f"{spreizung:.1f} K {quelle} + Korrektur {self.korrektur:+.1f} K; "
@@ -1296,6 +1418,42 @@ class HeizungVltKompressorRegelung(Hass):
             )
 
         self.control_kompressor_deckel(at, rl_ist, rl_ziel, error)
+
+    def absenkung_begrenzen(self, ziel, vlt_soll):
+        """Begrenzt eine Absenkung des VL-Solls bei laufendem Kompressor so, dass die Avarma
+        nicht stoppt (Begruendung bei VLT_ABSENK_*). Gibt den zu schreibenden Sollwert
+        zurueck; vlt_soll selbst heisst: diesmal nicht absenken."""
+        komp = self.safe_float(KOMPRESSOR_IST_SENSOR)
+        vl = self.safe_float(VLT_IST_SENSOR)
+        if ziel >= vlt_soll or komp is None or komp < KOMPRESSOR_LAEUFT_HZ or vl is None:
+            self.absenkung_wartet_seit = None
+            return ziel
+        # Kleinster ganzzahliger Sollwert, ueber dem der Vorlauf hoechstens
+        # VLT_ABSENK_MAX_UEBER_K liegt. Das Epsilon haelt 37,8 - 0,8 bei 37 statt 38.
+        sicher = float(math.ceil(vl - VLT_ABSENK_MAX_UEBER_K - 1e-6))
+        if sicher < vlt_soll:
+            self.absenkung_wartet_seit = None
+            return max(ziel, sicher)
+
+        now = self.datetime()
+        if self.absenkung_wartet_seit is None:
+            self.absenkung_wartet_seit = now
+            self.log(
+                f"VL-Soll-Absenkung {vlt_soll:.0f}->{ziel:.0f}°C zurueckgestellt: Vorlauf "
+                f"{vl:.1f}°C sitzt auf dem Sollwert, schon 1 K weniger wuerde den Kompressor "
+                f"stoppen. Spaetestens in {VLT_ABSENK_WARTEN_MAX_MINUTES} min trotzdem.",
+                level="INFO",
+            )
+        gewartet = (now - self.absenkung_wartet_seit).total_seconds() / 60
+        if gewartet < VLT_ABSENK_WARTEN_MAX_MINUTES:
+            return vlt_soll
+        self.absenkung_wartet_seit = None
+        self.log(
+            f"VL-Soll-Absenkung wartet seit {gewartet:.0f} min (Vorlauf {vl:.1f}°C) - "
+            f"senke trotzdem um 1 K, der Stopp zaehlt nicht fuer die Takterkennung",
+            level="INFO",
+        )
+        return vlt_soll - 1.0
 
     def kompressor_deckel_basis(self, at):
         """Stueckweise lineare Kennlinie Aussentemperatur -> Kompressor-Deckel."""

@@ -117,6 +117,7 @@ Auf die Kurve kommen:
 - Die **Spreizung** wird live gemessen (Vorlauf minus Rücklauf, wenn der Kompressor läuft und der Wert plausibel ist), sonst 5 K. Die Pumpe regelt über **P58 = 5 K** selbst auf diese Differenz.
 - Die **Korrektur** ist ein langsamer Nachregler: ±0,5 K je 15 min bei bleibender Abweichung, maximal ±3 K.
 - Geschrieben wird nur bei Änderung um ganze Grad (Abweichungen ≥ 3 K sofort, sonst höchstens alle 10 min).
+- **Absenken ohne Kompressorstopp:** Liegt der Vorlauf nach einer Absenkung **1 K oder mehr über dem neuen Sollwert, stoppt die Avarma sofort.** P2 geht nur in ganzen Grad – bei laufendem Kompressor wird deshalb nur so weit abgesenkt, dass der Vorlauf höchstens 0,8 K darüber liegt. Sitzt er genau auf dem Sollwert, wartet die Regelung, bis er von selbst etwas fällt, nach 30 min senkt sie trotzdem um 1 K.
 
 **Warum so und nicht einfach „VL-Soll hoch/runter in Schritten“?** Das hatte ich vorher – und es ging schief (siehe 6., 12.09.). Solange der Sollwert über dem tatsächlichen Vorlauf „parkt“, bremst er gar nichts. Die Avarma fährt dann bis zum Kompressor-Deckel, und das Absenken in 1-K-Schritten brauchte zwei Stunden, bis es überhaupt wirkte. Mit der Vorsteuerung liegt der Sollwert immer knapp beim Vorlauf, und die **Avarma moduliert selbst** – das kann ihr eingebauter Regler nämlich gut.
 
@@ -167,10 +168,12 @@ Bei mir hat der Avarma-Regler einmal **38 Minuten zu spät** abgetaut, obwohl al
 | Regel | Auslöser | Danach |
 |---|---|---|
 | Raum warm genug | EG-Mittel ≥ 21 °C, 30 min am Stück (nicht bei Frostprognose) | Neustart bei EG ≤ 20 °C |
-| Anlage taktet | 2 Kompressorstarts in 45 min (Abtauungen zählen nicht) | 3 h Sperre |
+| Anlage taktet | 2 Kompressorstarts in 45 min (Abtauungen und selbst verursachte Stopps zählen nicht, siehe unten) | 3 h Sperre |
 | Nachtsperre 22–10 Uhr | kein Start; eine laufende Anlage schaltet ab, sobald EG ≥ 20,5 °C | Ausnahme: Frostprognose ≤ 2 °C oder EG ≤ 19 °C |
 
 In der Übergangszeit liefert selbst die Mindestfrequenz (25 Hz) mehr, als das Haus abnimmt – dann taktet jede Wärmepumpe. Lieber ein paar Stunden aus und den Estrich puffern lassen als alle 15 Minuten neu starten.
+
+**Nicht jeder Stopp ist Takten.** In der Auswertung 17.–24.09. kamen 10 von 13 Kompressorstopps mitten im Lauf von der eigenen Vorsteuerung (Absenkung, siehe 3.2) und 3 von der **Ölrückführung**: Nach längerem Lauf mit niedriger Frequenz springt der Kompressor für unter einer Minute auf 50 Hz (P41), der Vorlauf schießt über den Sollwert, die Avarma stoppt. Alle drei Takt-Abschaltungen dieser Woche enthielten mindestens einen solchen Stopp. Seitdem zählen Stopps bis 5 min nach einer eigenen Absenkung und bis 3 min nach dem Sprung auf 50 Hz nicht mehr mit – jeder Stopp steht mit Grund im Log.
 
 ### 3.7 Hydraulische Lastverteilung
 
@@ -179,6 +182,7 @@ Wenn der Kompressor am Deckel hängt, reicht die Wärme nicht für alle Kreise. 
 - **Spender** in dieser Reihenfolge: Schlafzimmer (nicht unter 18 °C) → Keller → Flur → Yoga (nicht unter 20 °C)
 - **Auslöser:** Prioritätsraum mit Ventil ≥ 90 % und ≥ 0,3 K unter Soll, 15 min lang – **und** der Kompressor am Deckel. Ohne diese letzte Bedingung würde dauernd gedrosselt, denn bei milder Witterung erreicht die FBH das Bad-Ziel nie, egal wie weit andere Ventile zu sind.
 - −0,5 K je 10 min, bis das Spender-Ventil bei ~30 % steht. Die Original-Sollwerte liegen in Helfern und werden zurückgesetzt, sobald der Engpass vorbei ist.
+- **Übergangsmodus** (Schalter `wp_uebergangsmodus`): Dann ist das **Wohnzimmer der einzige Spender** (nicht unter 20 °C) und fällt dafür aus dem Vorrang. Grund: Im Übergang heizt das Haus aus dem Kaltstart hoch, das Bad verfehlt sein bewusst hohes Ziel ohnehin, und die normale Lastverteilung hatte binnen zwei Stunden Keller, Flur und Yoga bis an ihre Untergrenze gezogen – viel Kälte für wenig Wirkung.
 
 ### 3.8 Schutzschicht, unabhängig von der Regelung
 
@@ -205,7 +209,7 @@ Ende August kam dann **E15 (Wasserdurchfluss)** – reproduzierbar kurz nach jed
 ## 5. Was schon lernt – und was noch kommt
 
 ### 5.1 Heute im Einsatz
-- **Lernender Heizkurven-Offset:** Alle 5 h wird die Kurve um 0,5 K verschoben, wenn die Räume dauerhaft zu kalt oder zu warm sind (±3 K). In der Übergangszeit gegen das EG-Mittel (Ziel 21 °C), im Winter gegen das Bad. Ausgesetzt, wenn der Kompressor am Limit läuft – dann ist es ein Leistungs-, kein Kurvenproblem.
+- **Lernender Heizkurven-Offset:** Alle 5 h wird die Kurve um 0,5 K verschoben, wenn die Räume dauerhaft zu kalt oder zu warm sind (±3 K), gemessen am Bad. **In der Übergangszeit ausgesetzt:** Dort läuft die WP nur zwischen EG 20 und 21 °C an und aus – ein Offset gegen 21 °C sah praktisch immer „zu kalt“ und konnte nur steigen (1,0 → 3,0 K in drei Tagen, Rücklauf-Ziel 32–34 °C bei 11–17 °C Außentemperatur). Den Komfort regelt dann die EG-Abschaltung, der Offset hätte nur den COP verschlechtert. Ausgesetzt, wenn der Kompressor am Limit läuft – dann ist es ein Leistungs-, kein Kurvenproblem.
 - **Gebäude-Thermometrie:** Ein RC-Modell schätzt aus nächtlichen Abkühlphasen (00–05 Uhr, keine Sonne, keine Heizung, kein Lüften) die **Zeitkonstante des Hauses**. Erste Schätzung aus dem Sommer: **τ ≈ 92 h**. Das ist ausdrücklich vorläufig – im Sommer ist das Temperaturgefälle zu klein. Die App stuft sich selbst erst ab 15 K Gefällespanne als „belastbar“ ein und greift bis dahin in **keinen** Regelkreis ein.
 
 ### 5.2 Das Ziel für den Winter
@@ -228,6 +232,8 @@ Ende August kam dann **E15 (Wasserdurchfluss)** – reproduzierbar kurz nach jed
 - **12.09.:** Freigabe P68 = 0, Kabel auf der Platine umgesteckt, Wiederanlauf. Heizgrenzen-Abschaltung gebaut. **Rücklauf lief 2 K über Ziel** – der Vorlauf-Sollwert stand nach dem Anlagenneustart auf 45 °C und die Schrittlogik brauchte zwei Stunden zum Absenken. Drei Varianten durchgerechnet (Schritte, Frequenz regelt, Vorsteuerung) – die Vorsteuerung hat gewonnen.
 - **13.09.:** Vorsteuerung und Übergangsregeln live.
 - **14.09. – erste Nacht mit den neuen Regeln:** Vorsteuerung sauber (Rücklauf ±1 K, kein Überschwingen). Aber die Anlage lief von 20:20 bis 05:36, weil die Nachtsperre nur den Start verhinderte und der lernende Offset noch gegen das (bewusst hohe) Bad-Ziel arbeitete. Nachgeschärft: Nachtabschaltung ab EG 20,5 °C, Offset in der Übergangszeit am EG, Takt-Erkennung schon bei 2 Starts in 45 min.
+- **17.09.:** Laufzeit der WP in einem Helfer statt aus `last_changed` (ein HA-Neustart ließ eine laufende WP wie frisch gestartet aussehen). Übergangsmodus der Lastverteilung.
+- **25.09. – Auswertung der ersten Übergangswoche:** Räume warm, Rücklauf ruhig, aber drei Takt-Abschaltungen – verursacht von der eigenen Regelung (Absenkung des VL-Solls) und der Ölrückführung, nicht von zu viel Leistung. Dazu kletterte der lernende Offset wie eine Ratsche auf +3 K. Beides behoben, siehe 3.2, 3.6 und 5.1.
 
 **Meine wichtigsten Lehren:**
 1. **Erst messen, dann regeln.** Fast jede gute Entscheidung kam aus einer Auswertung, fast jeder Fehler aus einer Annahme.
@@ -235,6 +241,7 @@ Ende August kam dann **E15 (Wasserdurchfluss)** – reproduzierbar kurz nach jed
 3. **Jeden Registerwert am Panel gegenprüfen.** Die Doku ist nicht durchgängig verlässlich.
 4. **Schutzmechanismen gehören in den ESP**, nicht nur in Home Assistant.
 5. **Regeln immer als Paar denken:** Wer ein Einschaltkriterium ändert, muss das Ausschaltkriterium mit anschauen – sonst arbeiten sie gegeneinander.
+6. **Bevor man ein Symptom bekämpft, prüfen, ob man es selbst verursacht.** Das „Takten“ der Übergangszeit war zum großen Teil meine eigene Regelung.
 
 ---
 

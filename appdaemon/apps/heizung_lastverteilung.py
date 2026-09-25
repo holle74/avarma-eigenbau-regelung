@@ -67,6 +67,36 @@ DONORS = [
     },
 ]
 
+# --- Uebergangsmodus (2026-09-17) ---
+#
+# WARUM: In der Uebergangszeit heizt das Haus aus dem Kaltstart hoch, das Bad
+# verfehlt sein (bewusst hohes) Ziel praktisch dauerhaft, und die Lastverteilung
+# zieht dann der Reihe nach Schlafzimmer, Keller, Flur und Yoga bis auf ihre
+# Untergrenze - am 17.09.2026 alle drei innerhalb von zwei Stunden, danach kam
+# "kein Spender mehr verfuegbar". Gebracht hat es wenig, gekostet hat es vier
+# kuehle Raeume.
+#
+# Im Uebergang ist das Wohnzimmer der Raum, der am ehesten ohne Heizung auskommt.
+# Steht UEBERGANG_SWITCH auf on, ist es deshalb der EINZIGE Spender und faellt
+# dafuer aus dem Vorrang; Schlafzimmer, Keller, Flur und Yoga bleiben unbehelligt.
+UEBERGANG_SWITCH = "input_boolean.wp_uebergangsmodus"
+
+WOHNZIMMER_DONOR = {
+    "key": "wohnzimmer",
+    "climate": "climate.raumtemperaturregler_wohnzimmer_wohnzimmer",
+    "valves": ["sensor.heizung_wohnzimmer_wohnzimmer_valve_volume_flow"],
+    "floor": 20.0,
+    "backup_helper": "input_number.wp_spender_wohnzimmer_original_soll",
+}
+
+UEBERGANG_PRIORITY = [r for r in PRIORITY_ROOMS if r["key"] != "wohnzimmer"]
+UEBERGANG_DONORS = [WOHNZIMMER_DONOR]
+
+# Ueber ALLE Spender beider Modi laeuft das Zuruecksetzen - sonst bliebe ein Raum,
+# der im alten Modus gedrosselt wurde, nach dem Umschalten auf seinem abgesenkten
+# Wert stehen: die Freigabe schaut nur die Spender des aktuellen Modus an.
+ALLE_DONORS = DONORS + [WOHNZIMMER_DONOR]
+
 # --- Erzeuger-Gate (2026-08-24) ---
 #
 # WARUM: Am 24.08. hat die Lastverteilung zwischen 07:45 und 08:27 vier Raeume
@@ -147,6 +177,7 @@ class HeizungLastverteilung(Hass):
         # ERZEUGER_ENTSPANNT_MINUTES (20) abgelaufen - die App haette um 13:19
         # gedrosselt und um 13:24 wieder freigegeben.
         self.erzeuger_je_am_deckel = False
+        self.listen_state(self.on_modus_wechsel, UEBERGANG_SWITCH)
         self.run_in(self.check, 3)
         self.run_every(
             self.check,
@@ -154,6 +185,45 @@ class HeizungLastverteilung(Hass):
             CHECK_INTERVAL_SECONDS,
         )
         self.log("Heizung-Lastverteilung gestartet", level="INFO")
+
+    def uebergangsmodus(self):
+        return self.get_state(UEBERGANG_SWITCH) == "on"
+
+    def priority_rooms(self):
+        return UEBERGANG_PRIORITY if self.uebergangsmodus() else PRIORITY_ROOMS
+
+    def donors(self):
+        return UEBERGANG_DONORS if self.uebergangsmodus() else DONORS
+
+    def on_modus_wechsel(self, entity, attribute, old, new, **kwargs):
+        """Beim Umschalten die Spender des alten Modus sofort freigeben.
+
+        Ohne das blieben sie bis zum naechsten Ende des Engpasses gedrosselt - und
+        das kann in der Uebergangszeit Stunden dauern oder ganz ausbleiben.
+        """
+        if new == old:
+            return
+        aktiv = {d["key"] for d in self.donors()}
+        for donor in ALLE_DONORS:
+            if donor["key"] in aktiv:
+                continue
+            backup = self.safe_float(donor["backup_helper"])
+            if backup is None or backup <= NO_SENTINEL + 0.01:
+                continue
+            self.call_service(
+                "climate/set_temperature", entity_id=donor["climate"], temperature=backup
+            )
+            self.call_service(
+                "input_number/set_value", entity_id=donor["backup_helper"], value=NO_SENTINEL
+            )
+            self.donor_last_step.pop(donor["key"], None)
+            self.log(
+                f"Lastverteilung: {donor['key']} zurueckgesetzt auf {backup}°C "
+                f"(Moduswechsel, jetzt kein Spender mehr)",
+                level="INFO",
+            )
+        modus = "Uebergang - einziger Spender ist das Wohnzimmer" if new == "on" else "Winter"
+        self.log(f"Lastverteilung: Modus gewechselt auf {modus}", level="INFO")
 
     def safe_float(self, entity_id, attribute=None, default=None):
         raw = self.get_state(entity_id, attribute=attribute) if attribute else self.get_state(entity_id)
@@ -226,7 +296,7 @@ class HeizungLastverteilung(Hass):
             return
 
         constraint_room = None
-        for room in PRIORITY_ROOMS:
+        for room in self.priority_rooms():
             valve = self.safe_float(room["valve"])
             current = self.safe_float(room["climate"], attribute="current_temperature")
             target = self.safe_float(room["climate"], attribute="temperature")
@@ -256,7 +326,7 @@ class HeizungLastverteilung(Hass):
             self.restore_all_donors(reason="kein Engpass mehr")
 
     def handle_constraint(self, room):
-        for donor in DONORS:
+        for donor in self.donors():
             target = self.safe_float(donor["climate"], attribute="temperature")
             if target is None:
                 continue
@@ -326,7 +396,7 @@ class HeizungLastverteilung(Hass):
             )
             self.exhausted_logged.clear()
 
-        for donor in DONORS:
+        for donor in ALLE_DONORS:
             backup = self.safe_float(donor["backup_helper"])
             if backup is not None and backup > NO_SENTINEL + 0.01:
                 self.call_service(
