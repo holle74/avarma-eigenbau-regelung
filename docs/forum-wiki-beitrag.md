@@ -23,7 +23,7 @@ dieser Beitrag soll eine Sammelstelle für alles rund um die **Hofman Avarma** w
 
 | Wer | Modell / Version | Leistung / Spannung | Wärmeabgabe | Besonderheiten |
 |---|---|---|---|---|
-| Themenstarter | Avarma V2 Monoblock, R290 | 12 kW / 230 V | Estrich-FBH, 12 Kreise | nur Heizen, Durchflussmesser defekt (siehe 4.3) |
+| holle74 | Avarma V2 Monoblock, R290 | 12 kW / 230 V | Estrich-FBH, 12 Kreise | nur Heizen, Durchflussmesser defekt (siehe 4.3) |
 | | | | | |
 
 ## 2. Modbus-Anbindung
@@ -76,7 +76,7 @@ Der Werksreset hat bei mir geändert: P45 70→90, P46 25→35, **P63 0→1 (War
 
 Bitte ergänzen – gerade bei den Parametern, die Takten, Pumpe und Abtauung bestimmen:
 
-| Parameter | Werk | Themenstarter | | |
+| Parameter | Werk | holle74 | | |
 |---|---|---|---|---|
 | P41 Ölrückführungsfrequenz | 50 Hz | 50 Hz | | |
 | P46 Kompressor-Mindestfrequenz | 35 Hz | 25 Hz | | |
