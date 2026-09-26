@@ -85,7 +85,7 @@ WOHNZIMMER_DONOR = {
     "key": "wohnzimmer",
     "climate": "climate.raumtemperaturregler_wohnzimmer_wohnzimmer",
     "valves": ["sensor.heizung_wohnzimmer_wohnzimmer_valve_volume_flow"],
-    "floor": 20.0,
+    "floor": 21.0,
     "backup_helper": "input_number.wp_spender_wohnzimmer_original_soll",
 }
 
