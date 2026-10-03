@@ -19,12 +19,13 @@ Dieses Repo enthält den Code dazu.
 | Pfad | Was |
 |---|---|
 | `esphome/avarma-waermepumpe.yaml` | ESPHome-Konfiguration für einen ESP32-S3 mit RS485 (Modbus RTU, 9600 Baud, Adresse 1): Sensoren, Parameter-Register, schreibbare Stellgrößen, Heartbeat-Watchdog |
-| `appdaemon/apps/heizung_vlt_kompressor_regelung.py` | Die eigentliche Regelung: Ein/Aus, Heizkurve auf den Rücklauf, Vorsteuerung des Vorlauf-Sollwerts, Kompressor-Deckel, Lüfter, Not-Abtauung, Übergangs- und Nachtregeln |
+| `appdaemon/apps/heizung_vlt_kompressor_regelung.py` | Die eigentliche Regelung: Ein/Aus, Heizkurve auf den Rücklauf, Vorsteuerung des Vorlauf-Sollwerts, Kompressor-Deckel, Lüfter, Not-Abtauung, Übergangs- und Nachtregeln, Betriebsmodus |
 | `appdaemon/apps/heizung_lastverteilung.py` | Hydraulische Lastverteilung: drosselt Spender-Räume, wenn der Kompressor am Deckel hängt |
-| `appdaemon/apps/heizung_thermometrie.py` | Lernt die Zeitkonstante des Gebäudes (RC-Modell), schreibt nichts an die Anlage |
+| `appdaemon/apps/heizung_thermometrie.py` | Lernt das Gebäude (RC-Modell): Zeitkonstante, dazu mit der zugeführten Wärme Wärmeverlust (W/K) und Wärmespeicher (kWh/K). Schreibt nichts an die Anlage |
 | `appdaemon/apps/heizung_beobachter.py` | Statuszeile ins Log alle 5 Minuten |
 | `appdaemon/apps/apps.yaml` | AppDaemon-Konfiguration der vier Apps |
 | `homeassistant/automations.yaml` | Frost-Vorschau aus der Wetterprognose, Interim-Durchflussschutz |
+| `homeassistant/www/heizung/wp-modus-card.js` | Dashboard-Karte für den Betriebsmodus (nach `/config/www/heizung/` kopieren, als Ressource `/local/heizung/wp-modus-card.js` vom Typ *module* anlegen, Kartentyp `custom:wp-modus-card`) |
 | `docs/forum-wiki-beitrag.md` | Ausführliche Beschreibung (Warum, Aufbau, Regellogik, Geschichte, Fallstricke) |
 
 ## Voraussetzungen
@@ -48,7 +49,8 @@ Anlegen über *Einstellungen → Geräte & Dienste → Helfer*.
 |---|---|---|
 | `input_boolean.wp_autostart_aktiv` | Schalter | Erlaubt der Regelung, die WP selbst einzuschalten |
 | `input_boolean.wp_heizgrenze_aktiv` | Schalter | Erlaubt alle automatischen Abschaltungen (Heizgrenze, Takten, Raum warm, Nacht) |
-| `input_boolean.wp_uebergangsmodus` | Schalter | Lastverteilung im Übergangsmodus: nur das Wohnzimmer gibt ab (siehe Beitrag 3.7) |
+| `input_select.wp_betriebsmodus` | Auswahl: `KI Modus`, `KI Übergangszeit`, `Kühlen`, `Manuell` | Betriebsmodus (siehe Beitrag 8.9). Die Optionen müssen exakt so heißen |
+| `input_boolean.wp_uebergangsmodus` | Schalter | Übergangsregeln an/aus – wird vom Betriebsmodus gesetzt, nicht von Hand schalten (siehe Beitrag 8.6/8.7) |
 | `input_number.wp_heizkurve_offset` | Zahl, −3…+3, Schritt 0,5 °C | Parallelverschiebung der Heizkurve, wird von der Regelung angepasst (nicht in der Übergangszeit) |
 | `input_number.wp_einschaltzeit` | Zahl, 0…4102444800, Schritt 1 s | Einschaltzeitpunkt der WP als Unix-Zeit, übersteht HA-Neustarts (0 = unbekannt) |
 | `input_number.wp_prognose_aussentemperatur_minimum_24h` | Zahl, −30…40, Schritt 0,1 °C | Minimum der 24-h-Prognose, befüllt von der Automation |
@@ -59,6 +61,7 @@ Anlegen über *Einstellungen → Geräte & Dienste → Helfer*.
 | `sensor.wp_spreizung_vl_rl` | Template | Vorlauf minus Rücklauf (der Register-Wert „Temperaturdifferenz Hauptkreis“ ist **nicht** die Spreizung) |
 | `sensor.wp_raumtemperatur_mittel_eg` | Min/Max (mean) | Mittel der Räume im Erdgeschoss für die Übergangsregeln |
 | `sensor.durchfluss_berechnet` | Template | `Pumpenleistung_% × 0,22` in L/min (siehe Beitrag, Abschnitt Durchfluss) |
+| `sensor.heat_pump_thermal_energy_total` | Integral (Riemann) über die Heizleistung, kWh | Wärmemenge für das Gebäudemodell mit zugeführter Wärme. Heizleistung = Durchfluss × Spreizung × 0,0698 (kW) |
 
 ## Einrichtung – empfohlene Reihenfolge
 

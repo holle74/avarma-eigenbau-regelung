@@ -251,13 +251,13 @@ Wegen der verspäteten Abtauung aus 4.4 taut die Regelung im Zweifel selbst ab (
 
 **Heizgrenze (ganzjährig):** Aus, wenn das **3-h-Mittel** der Außentemperatur ≥ 18,5 °C ist, keine kalte Nacht angesagt ist und sie mindestens 2 h läuft. Die 2 K zwischen Ein (16,5, Momentanwert) und Aus (18,5, Mittel) verhindern das Takten um die Schwelle.
 
-**Übergangszeit (September–November, März–Mai)** – zusätzlich:
+**Übergangszeit** (seit Oktober über den Betriebsmodus gewählt statt fest nach Kalender, siehe 8.9) – zusätzlich:
 
 | Regel | Auslöser | Danach |
 |---|---|---|
 | Raum warm genug | EG-Mittel ≥ 21 °C, 30 min am Stück (nicht bei Frostprognose) | Neustart bei EG ≤ 20 °C |
 | Anlage taktet | 2 Kompressorstarts in 45 min (Abtauungen und selbst verursachte Stopps zählen nicht, siehe unten) | 3 h Sperre |
-| Nachtsperre 22–10 Uhr | kein Start; eine laufende Anlage schaltet ab, sobald EG ≥ 20,5 °C | Ausnahme: Frostprognose ≤ 2 °C oder EG ≤ 19 °C |
+| Nachtsperre 22–08:30 Uhr | kein Start; eine laufende Anlage schaltet ab, sobald EG ≥ 20,5 °C | Ausnahme: Frostprognose ≤ 2 °C oder EG ≤ 19 °C |
 
 Lieber ein paar Stunden aus und den Estrich puffern lassen als alle 15 Minuten neu starten (siehe 4.2).
 
@@ -270,7 +270,7 @@ Wenn der Kompressor am Deckel hängt, reicht die Wärme nicht für alle Kreise. 
 - **Spender** in dieser Reihenfolge: Schlafzimmer (nicht unter 18 °C) → Keller → Flur → Yoga (nicht unter 20 °C)
 - **Auslöser:** Prioritätsraum mit Ventil ≥ 90 % und ≥ 0,3 K unter Soll, 15 min lang – **und** der Kompressor am Deckel. Ohne diese letzte Bedingung würde dauernd gedrosselt, denn bei milder Witterung erreicht die FBH das Bad-Ziel nie, egal wie weit andere Ventile zu sind.
 - −0,5 K je 10 min, bis das Spender-Ventil bei ~30 % steht. Die Original-Sollwerte liegen in Helfern und werden zurückgesetzt, sobald der Engpass vorbei ist.
-- **Übergangsmodus** (Schalter `wp_uebergangsmodus`): Dann ist das **Wohnzimmer der einzige Spender** (nicht unter 21 °C) und fällt dafür aus dem Vorrang. Grund: Im Übergang heizt das Haus aus dem Kaltstart hoch, das Bad verfehlt sein bewusst hohes Ziel ohnehin, und die normale Lastverteilung hatte binnen zwei Stunden Keller, Flur und Yoga bis an ihre Untergrenze gezogen – viel Kälte für wenig Wirkung.
+- **Übergangsmodus** (Betriebsmodus „KI Übergangszeit“, der den Schalter `wp_uebergangsmodus` setzt): Dann ist das **Wohnzimmer der einzige Spender** (nicht unter 21 °C) und fällt dafür aus dem Vorrang. Grund: Im Übergang heizt das Haus aus dem Kaltstart hoch, das Bad verfehlt sein bewusst hohes Ziel ohnehin, und die normale Lastverteilung hatte binnen zwei Stunden Keller, Flur und Yoga bis an ihre Untergrenze gezogen – viel Kälte für wenig Wirkung.
 
 ### 8.8 Schutzschicht, unabhängig von der Regelung
 
@@ -278,11 +278,28 @@ Wenn der Kompressor am Deckel hängt, reicht die Wärme nicht für alle Kreise. 
 - **Zwei Handschalter:** Autostart erlaubt/gesperrt, automatische Abschaltungen erlaubt/gesperrt
 - **Interim-Durchflussschutz** (siehe 4.3): Aus bei laufendem Kompressor und Spreizung > 10 K oder Pumpe < 30 %
 
+### 8.9 Betriebsmodus: ein Schalter für alles
+
+Seit Oktober wähle ich den Modus mit einem einzigen Schalter (`input_select.wp_betriebsmodus`) statt mit mehreren Einzelschaltern und einem festen Kalender:
+
+| Modus | Regelung | Avarma |
+|---|---|---|
+| **KI Modus** | regelt mit Winterregeln (Lastverteilung über Schlafzimmer, Keller, Flur, Yoga) | Heizen |
+| **KI Übergangszeit** | regelt mit den Übergangsregeln aus 8.6 und dem Übergangsmodus aus 8.7 | Heizen |
+| **Kühlen** | greift nicht ein, gibt gedrosselte Räume zurück | Kühlen – Wassertemperatur stelle ich an der Avarma selbst ein |
+| **Manuell** | greift nicht ein: Lüfter auf Automatik, Kompressor-Deckel 90 Hz, gedrosselte Räume zurück | Heizen – „wie früher“, Vorlauf stelle ich selbst ein |
+
+- Der Schalter setzt die Avarma-Betriebsart (Register 4097) gleich mit – nach der Erfahrung vom 23.07. (stand unbemerkt auf „Kühlen“) war mir das wichtig.
+- **In Kühlen und Manuell schreibt die Regelung trotzdem weiter den Heartbeat.** Sonst würde der Watchdog im ESP nach 30 min 32 °C / 90 Hz über die Einstellung von Hand legen.
+- ⚠️ **Kühlen über eine Fußbodenheizung ohne Taupunktüberwachung** ist bei mir bewusst so (keine Feuchtesensoren im Haus). Zu kaltes Wasser kann im Estrich kondensieren – wer das nachbaut, sollte entweder Feuchtesensoren und eine Taupunktgrenze einbauen oder das Wasser deutlich über dem Taupunkt halten.
+- Für das Dashboard gibt es eine eigene Karte (`homeassistant/www/heizung/wp-modus-card.js`): Segmentschalter in der Farbe des Modus, kurze Erklärung, was der Modus gerade tut, Rückfrage vor Kühlen/Manuell.
+
 ## 9. Was schon lernt – und was noch kommt
 
 ### 9.1 Heute im Einsatz
 - **Lernender Heizkurven-Offset:** Alle 5 h wird die Kurve um 0,5 K verschoben, wenn die Räume dauerhaft zu kalt oder zu warm sind (±3 K), gemessen am Bad. **In der Übergangszeit ausgesetzt:** Dort läuft die WP nur zwischen EG 20 und 21 °C an und aus – ein Offset gegen 21 °C sah praktisch immer „zu kalt“ und konnte nur steigen (1,0 → 3,0 K in drei Tagen, Rücklauf-Ziel 32–34 °C bei 11–17 °C Außentemperatur). Ebenfalls ausgesetzt, wenn der Kompressor am Limit läuft – dann ist es ein Leistungs-, kein Kurvenproblem.
 - **Gebäude-Thermometrie:** Ein RC-Modell schätzt aus nächtlichen Abkühlphasen (00–05 Uhr, keine Sonne, keine Heizung, kein Lüften) die **Zeitkonstante des Hauses**. Das ist ausdrücklich vorläufig – im Sommer ist das Temperaturgefälle zu klein. Die App stuft sich selbst erst ab 15 K Gefällespanne als „belastbar“ ein und greift bis dahin in **keinen** Regelkreis ein.
+- **Gebäudemodell mit zugeführter Wärme (seit Oktober):** Das erste Modell lernt nur aus Nächten ohne Heizung – im Winter läuft die WP aber nachts fast immer, das Modell würde genau dann verhungern, wenn es endlich gute Daten bekäme. Deshalb rechnet daneben ein zweites: *Temperaturänderung = a × (außen − innen) + b × Wärmeleistung + c*. Die Wärmeleistung kommt aus Durchfluss × Spreizung, wegen des Estrichs wird sie mit 0–8 h Verzögerung probiert. Daraus folgen zwei echte Kennzahlen: **Wärmeverlust** (W je K Temperaturunterschied) und **Wärmespeicher** (kWh, um das Haus 1 K anzuheben). Erster, noch sehr vorläufiger Stand aus nur 5 geheizten Nächten: ~360 W/K und ~54 kWh/K – also rund 9,5 kW Heizlast bei −5 °C, genau dort, wo die Avarma bei mir an ihre Grenze kommt. Belastbar erst nach etwa 15 geheizten Frostnächten.
 
 ### 9.2 Das Ziel für den Winter
 - Die fest verdrahtete Vorlade-Formel durch eine **Auskühlprognose aus dem gelernten Gebäudemodell** ersetzen: „Heute Nacht −6 °C, das Haus verliert bis morgen 7 K – also jetzt so viel einlagern.“
@@ -304,6 +321,9 @@ Wenn der Kompressor am Deckel hängt, reicht die Wärme nicht für alle Kreise. 
 - **14.09. – erste Nacht mit den neuen Regeln:** Vorsteuerung sauber (Rücklauf ±1 K, kein Überschwingen). Aber die Anlage lief von 20:20 bis 05:36, weil die Nachtsperre nur den Start verhinderte. Nachgeschärft: Nachtabschaltung ab EG 20,5 °C, Takt-Erkennung schon bei 2 Starts in 45 min.
 - **17.09.:** Laufzeit der WP in einem Helfer statt aus `last_changed` (ein HA-Neustart ließ eine laufende WP wie frisch gestartet aussehen). Übergangsmodus der Lastverteilung.
 - **25.09. – Auswertung der ersten Übergangswoche:** Räume warm, Rücklauf ruhig, aber drei Takt-Abschaltungen – verursacht von der eigenen Regelung und der Ölrückführung, nicht von zu viel Leistung. Dazu kletterte der lernende Offset wie eine Ratsche auf +3 K. Beides behoben, siehe 8.2, 8.6 und 9.1.
+- **27.09.:** Nachtsperre endet um 08:30 statt 10:00.
+- **02.10.:** Ein Betriebsmodus-Schalter ersetzt Kalender und Einzelschalter (8.9).
+- **03.10.:** Zweites Gebäudemodell mit zugeführter Wärme (9.1) – damit lernt die Thermometrie auch im Winter weiter.
 
 **Meine wichtigsten Lehren:**
 1. **Erst messen, dann regeln.** Fast jede gute Entscheidung kam aus einer Auswertung, fast jeder Fehler aus einer Annahme.
@@ -335,7 +355,7 @@ Weil ich danach sicher gefragt werde: Die Aufteilung war ziemlich klar.
 
 **Repo:** https://github.com/holle74/avarma-eigenbau-regelung
 
-Enthalten: ESPHome-Konfiguration, die vier AppDaemon-Apps, die zwei Automationen und eine Liste aller benötigten Helfer. Private Angaben sind entfernt, Entity-IDs müsst ihr an eure Installation anpassen.
+Enthalten: ESPHome-Konfiguration, die vier AppDaemon-Apps, die zwei Automationen, die Dashboard-Karte für den Betriebsmodus und eine Liste aller benötigten Helfer. Private Angaben sind entfernt, Entity-IDs müsst ihr an eure Installation anpassen.
 
 > ⚠️ **Auf eigene Gefahr.** Die Regelung schreibt Register der Wärmepumpe. Jede Anlage und jeder Firmwarestand kann abweichen. Bitte erst nur lesen, jeden Wert am Panel gegenprüfen und schreibende Entities einzeln freischalten. Garantiefragen klärt jeder selbst.
 

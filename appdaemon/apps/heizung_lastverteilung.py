@@ -81,6 +81,11 @@ DONORS = [
 # dafuer aus dem Vorrang; Schlafzimmer, Keller, Flur und Yoga bleiben unbehelligt.
 UEBERGANG_SWITCH = "input_boolean.wp_uebergangsmodus"
 
+# Betriebsmodus (2026-10-02), siehe heizung_vlt_kompressor_regelung.py. In
+# "Kuehlen" und "Manuell" gibt die Lastverteilung alle Raeume zurueck und ruht.
+MODUS_HELPER = "input_select.wp_betriebsmodus"
+MODI_OHNE_KI = ("Kühlen", "Manuell")
+
 WOHNZIMMER_DONOR = {
     "key": "wohnzimmer",
     "climate": "climate.raumtemperaturregler_wohnzimmer_wohnzimmer",
@@ -178,6 +183,7 @@ class HeizungLastverteilung(Hass):
         # gedrosselt und um 13:24 wieder freigegeben.
         self.erzeuger_je_am_deckel = False
         self.listen_state(self.on_modus_wechsel, UEBERGANG_SWITCH)
+        self.listen_state(lambda *a, **k: self.run_in(self.check, 1), MODUS_HELPER)
         self.run_in(self.check, 3)
         self.run_every(
             self.check,
@@ -274,11 +280,14 @@ class HeizungLastverteilung(Hass):
 
     def check(self, **kwargs):
         wp_on = self.get_state("switch.esphome_web_avarma_warmepumpe_ein_aus") == "on"
+        modus = self.get_state(MODUS_HELPER)
 
-        if not wp_on:
+        if not wp_on or modus in MODI_OHNE_KI:
             for key in self.constraint_since:
                 self.constraint_since[key] = None
-            self.restore_all_donors(reason="Waermepumpe aus")
+            self.restore_all_donors(
+                reason="Waermepumpe aus" if not wp_on else f"Betriebsmodus {modus}"
+            )
             return
 
         # Erzeuger-Gate vor der Engpass-Erkennung: Hat die Waermepumpe Luft, gibt

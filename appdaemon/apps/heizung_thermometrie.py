@@ -41,6 +41,24 @@ stuendlich und rechnet taeglich neu.
 Der Sensor sensor.gebaeude_modell_guete traegt deshalb ein Attribut
 "belastbarkeit". Solange dort "vorlaeufig" steht, gehoert das Modell nicht in
 einen Regelkreis.
+
+ZWEITES MODELL MIT ZUGEFUEHRTER WAERME (03.10.2026)
+------------------------------------------------------------
+Das Modell oben lernt nur aus Naechten ohne Heizung. Im Winter laeuft die WP
+nachts fast immer - dann bleiben kaum Naechte uebrig, genau wenn das Gefaelle
+endlich gross genug waere. Deshalb rechnet daneben ein zweites Modell, das die
+Heizleistung mitnimmt und so auch geheizte Naechte verwertet:
+
+    dT_innen/dt = a * (T_aussen - T_innen) + b * Q + c
+
+Q ist die mittlere Waermeleistung der WP in kW (Feld "q" je Stundenzeile, aus
+WAERME_ZAEHLER). Daraus folgen zwei echte Kennzahlen:
+    C = 1/b      Waermekapazitaet: kWh, die das Haus um 1 K anheben
+    H = a * C    Waermeverlust: kW je K Temperaturunterschied (als W/K publiziert)
+Der Estrich gibt Waerme verzoegert an die Raumluft ab. Q wird deshalb mit
+mehreren Verzoegerungen (VERZOEGERUNGEN_H) probiert, die beste gewinnt.
+Grenzen: Q ist geschaetzt (Durchfluss aus Pumpenleistung x 0,22, der Messer ist
+defekt) und erst ab 14.07.2026 brauchbar. Das einfache Modell bleibt unveraendert.
 """
 
 import json
@@ -89,6 +107,19 @@ MIN_PHASEN = 8
 # Ab dieser Gefaellespanne (K) gilt die Schaetzung als belastbar. Im Sommer
 # werden rund 8 K erreicht, im Winter ein Vielfaches.
 GEFAELLE_SPANNE_BELASTBAR = 15.0
+
+# Modell mit Waerme (siehe Modulkopf)
+WAERME_ZAEHLER_STANDARD = "sensor.heat_pump_thermal_energy_total"
+SENSOR_VERLUST = "sensor.gebaeude_waermeverlust"
+SENSOR_KAPAZITAET = "sensor.gebaeude_waermekapazitaet"
+VERZOEGERUNGEN_H = (0, 1, 2, 3, 4, 6, 8)
+# Erst ab so vielen geheizten Naechten wird C/H veroeffentlicht - ohne Heizphasen
+# ist b nicht bestimmbar.
+MIN_PHASEN_GEHEIZT = 5
+Q_GEHEIZT_KW = 0.3
+# Mehr als das je Stunde schafft die 12-kW-Anlage nicht - darueber ist es ein
+# Zaehlersprung (z.B. am 11.02.2026: 48 kWh in einer Stunde).
+Q_MAX_KW = 16.0
 
 
 def loese(A, b):
@@ -143,6 +174,7 @@ class HeizungThermometrie(hass.Hass):
         self.wp_entity = self.args.get(
             "wp_entity", "switch.esphome_web_avarma_warmepumpe_ein_aus")
         self.wetter_entity = self.args.get("wetter_entity", "weather.home")
+        self.waerme_entity = self.args.get("waerme_entity", WAERME_ZAEHLER_STANDARD)
         self.lat = float(self.args.get("latitude", LAT_STANDARD))
         self.lon = float(self.args.get("longitude", LON_STANDARD))
         self.max_tage = int(self.args.get("max_tage", 120))
@@ -250,6 +282,19 @@ class HeizungThermometrie(hass.Hass):
             "sonne": round(sonnenhoehe(jetzt, self.lat, self.lon), 2),
             "wp": 1 if wp_roh == "on" else 0,
         }
+        # Mittlere Waermeleistung seit der letzten Messung (kW). Gespeichert wird der
+        # Zuwachs je Zeile statt des Zaehlerstands, damit nachtraeglich aus der
+        # Statistik ergaenzte Zeilen und Live-Zeilen zusammenpassen.
+        zaehler = self.zahl(self.waerme_entity)
+        letzt = self.daten.get("waerme_letzt")
+        if zaehler is not None and letzt:
+            stunden = (jetzt - letzt["t"]) / 3600.0
+            if 0.1 <= stunden <= 2.0:
+                q = (zaehler - letzt["wert"]) / stunden
+                if 0 <= q <= Q_MAX_KW:
+                    zeile["q"] = round(q, 3)
+        if zaehler is not None:
+            self.daten["waerme_letzt"] = {"t": jetzt, "wert": zaehler}
         # Pro Stunde nur ein Wert. Beim Start laufen Sofortmessung und erster
         # Stundenlauf dicht hintereinander; ohne das belegten beide dieselbe
         # Stunde und die Phasenerkennung saehe einen Scheinsprung von 0 K/h.
@@ -325,7 +370,151 @@ class HeizungThermometrie(hass.Hass):
             "rmse": math.sqrt(ss_res / len(y)),
         }
 
+    # ------------------------------------------- Modell mit zugefuehrter Waerme
+
+    def phasen_mit_waerme(self, verzoegerung):
+        """Wie phasen_finden, aber geheizte Naechte bleiben drin.
+
+        Q je Phase ist das Mittel der Waermeleistung ueber dieselben fuenf Stunden,
+        um `verzoegerung` Stunden nach vorn verschoben (Estrich-Traegheit). Eine
+        Zeile ohne q zaehlt als 0 kW, wenn die WP aus war - sonst faellt die Phase raus.
+        """
+        nach_stunde = {z["t"] // 3600: z for z in self.daten["messwerte"]}
+        phasen = []
+        for schluessel, start in sorted(nach_stunde.items()):
+            if datetime.datetime.fromtimestamp(start["t"]).hour != PHASE_START_H:
+                continue
+            kette = [nach_stunde.get(schluessel + i) for i in range(PHASE_LAENGE_H + 1)]
+            if any(k is None for k in kette):
+                continue
+            if any(k["sonne"] > 0.5 for k in kette):
+                continue
+            spruenge = [abs(kette[i + 1]["innen"] - kette[i]["innen"])
+                        for i in range(len(kette) - 1)]
+            if max(spruenge) > MAX_SPRUNG_K_PRO_H:
+                continue
+            leistung = []
+            for i in range(1, PHASE_LAENGE_H + 1):
+                z = nach_stunde.get(schluessel + i - verzoegerung)
+                if z is None:
+                    break
+                if z.get("q") is not None:
+                    leistung.append(z["q"])
+                elif not z["wp"]:
+                    leistung.append(0.0)
+                else:
+                    break
+            if len(leistung) != PHASE_LAENGE_H:
+                continue
+            dauer = (kette[-1]["t"] - kette[0]["t"]) / 3600.0
+            if dauer <= 0:
+                continue
+            phasen.append({
+                "dT_pro_h": (kette[-1]["innen"] - kette[0]["innen"]) / dauer,
+                "gefaelle": sum(k["aussen"] - k["innen"] for k in kette) / len(kette),
+                "q": sum(leistung) / len(leistung),
+            })
+        return phasen
+
+    def fitten_mit_waerme(self, phasen):
+        """Kleinste Quadrate fuer dT/dt = a * gefaelle + b * Q + c."""
+        spalten = [lambda p: p["gefaelle"], lambda p: p["q"], lambda p: 1.0]
+        n = len(spalten)
+        A = [[sum(f(p) * g(p) for p in phasen) for g in spalten] for f in spalten]
+        bv = [sum(f(p) * p["dT_pro_h"] for p in phasen) for f in spalten]
+        a, b, c = loese(A, bv)
+        y = [p["dT_pro_h"] for p in phasen]
+        y_hat = [a * p["gefaelle"] + b * p["q"] + c for p in phasen]
+        ss_res = sum((y[i] - y_hat[i]) ** 2 for i in range(len(y)))
+        mittel = sum(y) / len(y)
+        ss_tot = sum((v - mittel) ** 2 for v in y)
+        return {"a": a, "b": b, "c": c,
+                "r2": 1 - ss_res / ss_tot if ss_tot > 1e-12 else float("nan"),
+                "rmse": math.sqrt(ss_res / len(y))}
+
+    def auswerten_waerme(self):
+        """Probiert alle Verzoegerungen und veroeffentlicht die beste gueltige."""
+        bestes, versuche = None, {}
+        for lag in VERZOEGERUNGEN_H:
+            phasen = self.phasen_mit_waerme(lag)
+            geheizt = sum(1 for p in phasen if p["q"] >= Q_GEHEIZT_KW)
+            versuche[lag] = {"naechte": len(phasen), "geheizt": geheizt}
+            if len(phasen) < MIN_PHASEN or geheizt < MIN_PHASEN_GEHEIZT:
+                continue
+            try:
+                m = self.fitten_mit_waerme(phasen)
+            except (ValueError, ZeroDivisionError):
+                continue
+            versuche[lag]["r2"] = round(m["r2"], 3)
+            # a <= 0 oder b <= 0 ist physikalisch unmoeglich (Haus kuehlt bei
+            # Waerme ab / waermer draussen kuehlt) - Datenproblem, nicht nehmen.
+            if m["a"] <= 0 or m["b"] <= 0:
+                continue
+            m.update({"lag": lag, "naechte": len(phasen), "geheizt": geheizt,
+                      "q_max": max(p["q"] for p in phasen),
+                      "gefaelle_spanne": max(p["gefaelle"] for p in phasen)
+                      - min(p["gefaelle"] for p in phasen)})
+            if bestes is None or m["r2"] > bestes["r2"]:
+                bestes = m
+
+        meiste_geheizt = max((v["geheizt"] for v in versuche.values()), default=0)
+        if bestes is None:
+            text = (f"sammelt noch: {meiste_geheizt} geheizte Naechte, "
+                    f"{MIN_PHASEN_GEHEIZT} noetig") if meiste_geheizt < MIN_PHASEN_GEHEIZT \
+                else "noch kein physikalisch gueltiger Fit"
+            for sensor, name, einheit in (
+                (SENSOR_VERLUST, "Gebaeude Waermeverlust", "W/K"),
+                (SENSOR_KAPAZITAET, "Gebaeude Waermekapazitaet", "kWh/K"),
+            ):
+                self.set_state(sensor, state="unknown", replace=True,
+                               attributes={"friendly_name": name,
+                                           "unit_of_measurement": einheit,
+                                           "status": text,
+                                           "versuche": json.dumps(versuche)})
+            self.log(f"Modell mit Waerme: {text}", level="INFO")
+            return
+
+        kapazitaet = 1.0 / bestes["b"]
+        verlust_w = bestes["a"] * kapazitaet * 1000.0
+        bestes["stand"] = datetime.datetime.now().isoformat(timespec="seconds")
+        self.daten["modell_waerme"] = bestes
+        self.speichere()
+        belastbar = (bestes["gefaelle_spanne"] >= GEFAELLE_SPANNE_BELASTBAR
+                     and bestes["geheizt"] >= 3 * MIN_PHASEN_GEHEIZT)
+        gemeinsam = {
+            "tau_stunden": str(round(1.0 / bestes["a"], 1)),
+            "verzoegerung_h": str(bestes["lag"]),
+            "r2": str(round(bestes["r2"], 3)),
+            "rmse_k_pro_h": str(round(bestes["rmse"], 4)),
+            "naechte": str(bestes["naechte"]),
+            "geheizte_naechte": str(bestes["geheizt"]),
+            "belastbarkeit": "belastbar" if belastbar else "vorlaeufig",
+            "versuche": json.dumps(versuche),
+            "stand": bestes["stand"],
+        }
+        self.set_state(SENSOR_VERLUST, state=str(round(verlust_w)), replace=True,
+                       attributes={"friendly_name": "Gebaeude Waermeverlust",
+                                   "unit_of_measurement": "W/K",
+                                   "icon": "mdi:home-export-outline",
+                                   "state_class": "measurement",
+                                   "heizlast_bei_minus_10": str(round(verlust_w * 30 / 1000, 1)) + " kW",
+                                   **gemeinsam})
+        self.set_state(SENSOR_KAPAZITAET, state=str(round(kapazitaet, 1)), replace=True,
+                       attributes={"friendly_name": "Gebaeude Waermekapazitaet",
+                                   "unit_of_measurement": "kWh/K",
+                                   "icon": "mdi:home-thermometer-outline",
+                                   "state_class": "measurement",
+                                   **gemeinsam})
+        self.log(f"Modell mit Waerme: H={verlust_w:.0f} W/K, C={kapazitaet:.1f} kWh/K, "
+                 f"tau={1.0 / bestes['a']:.0f} h, Verzoegerung {bestes['lag']} h, "
+                 f"R2={bestes['r2']:.2f} aus {bestes['naechte']} Naechten "
+                 f"({bestes['geheizt']} geheizt)", level="INFO")
+
     def auswerten(self, kwargs=None):
+        try:
+            self.auswerten_waerme()
+        except Exception as e:  # das einfache Modell darf daran nicht scheitern
+            self.log(f"Modell mit Waerme fehlgeschlagen: {e}", level="WARNING")
         phasen = self.phasen_finden()
         if len(phasen) < MIN_PHASEN:
             self.log(f"Erst {len(phasen)} auswertbare Naechte "

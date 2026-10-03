@@ -55,6 +55,26 @@ AUTOSTART_HELPER = "input_boolean.wp_autostart_aktiv"
 # Ein Test darf nicht von einer Komfortlogik abgewuergt werden.
 HEIZGRENZE_HELPER = "input_boolean.wp_heizgrenze_aktiv"
 
+# Betriebsmodus (2026-10-02): Auswahl im Dashboard statt Kalender.
+#   KI Modus          - Regelung aktiv, Winterregeln
+#   KI Uebergangszeit - Regelung aktiv, Uebergangsregeln (UEBERGANG_SWITCH an)
+#   Kuehlen           - Avarma auf Kuehlen, Regelung greift nicht ein. Wassertemperatur
+#                       stellt der Betreiber selbst ein (bewusst ohne Taupunktschutz - es gibt
+#                       keine Feuchtesensoren im Haus).
+#   Manuell           - Avarma auf Heizen, Regelung greift nicht ein ("wie frueher").
+# Beim Wechsel auf Kuehlen/Manuell gibt die App einmal ab: Luefter auf Automatik,
+# Kompressor-Deckel auf KOMPRESSOR_MAX_NORMAL. Den Heartbeat schreibt sie weiter, sonst
+# wuerde der ESPHome-Watchdog nach 30 min 32 Grad/90 Hz ueber die Einstellung von Hand legen.
+# Unbekannter Zustand des Helfers gilt als KI-Betrieb - so lief die Anlage bisher.
+MODUS_HELPER = "input_select.wp_betriebsmodus"
+MODUS_KI = "KI Modus"
+MODUS_UEBERGANG = "KI Übergangszeit"
+MODUS_KUEHLEN = "Kühlen"
+MODUS_MANUELL = "Manuell"
+UEBERGANG_SWITCH = "input_boolean.wp_uebergangsmodus"
+AVARMA_MODUS_SELECT = "select.esphome_web_avarma_betriebsmodus_wahl"
+FAN_MODE_AUTOMATISCH = "Automatisch"
+
 # Uebergangszeit-Regeln (2026-09-13), siehe UEBERGANG_* weiter unten.
 # Mittel aus Ankleide, Bad, Flur, Keller und Yoga - min_max-Helfer
 # (entry_id 01M2D0PKR9XXFS1XCAHN0MAR8F).
@@ -466,9 +486,9 @@ TAG_START_HOUR = 7
 TAG_END_HOUR = 22
 
 # -------------------- Uebergangszeit (2026-09-13) --------------------
-# Gilt nur Maerz-Mai und September-November. Dezember bis Februar laeuft die Anlage ohne
-# diese Regeln; die Heizgrenze (AT-Mittel) gilt ganzjaehrig.
-UEBERGANG_MONATE = (3, 4, 5, 9, 10, 11)
+# Gilt, solange UEBERGANG_SWITCH an ist - gesetzt ueber den Betriebsmodus "KI Uebergangszeit"
+# (siehe MODUS_HELPER). Bis 02.10.2026 galt sie fest Maerz-Mai und September-November.
+# Die Heizgrenze (AT-Mittel) gilt in beiden KI-Modi.
 # Abschalten, wenn das EG lange genug warm ist. 21 Grad erreicht das EG ohne Heizung nicht
 # (Ende August/Anfang September: Tagesmittel 19,0-20,2), das Kriterium spricht also nur
 # auf echte Heizleistung an. Die Haltezeit faengt den 0,5-K-Sprung von free@home bei
@@ -479,21 +499,26 @@ EG_AUS_HALTE_MINUTES = 30
 # Wiedereinschalten in der Uebergangszeit - statt Bad <= 18,5. Sonst muesste das Bad nach
 # einer Abschaltung bei 21 Grad im EG erst 2 K verlieren.
 EG_EIN_C = 20.0
-# Nachtsperre: kein START zwischen 22 und 10 Uhr. Aufgehoben bei Frostprognose
+# Nachtsperre: kein START zwischen 22:00 und 08:30 Uhr. Aufgehoben bei Frostprognose
 # (FROST_THRESHOLD_C) oder wenn das EG trotzdem auf die Untergrenze faellt.
 # Eine laufende Anlage lief nach dem Beschluss vom 13.09. zunaechst weiter. Geaendert am
 # 14.09.: Start um 20:20 hat die ganze Nacht bis 05:36 geheizt, EG erreichte
 # 21 Grad nie (max. 20,84). Jetzt schaltet sie in der Sperrzeit ab, sobald das EG
 # EG_NACHT_AUS_C erreicht - ausser bei Frostprognose.
-NACHTSPERRE_START_HOUR = 22
-NACHTSPERRE_ENDE_HOUR = 10
+# Ende am 27.09.2026 von 10:00 auf 08:30 vorgezogen. (Stunde, Minute).
+NACHTSPERRE_START = (22, 0)
+NACHTSPERRE_ENDE = (8, 30)
+NACHTSPERRE_TEXT = (
+    f"{NACHTSPERRE_START[0]:02d}:{NACHTSPERRE_START[1]:02d}-"
+    f"{NACHTSPERRE_ENDE[0]:02d}:{NACHTSPERRE_ENDE[1]:02d} Uhr"
+)
 EG_NACHT_UNTERGRENZE_C = 19.0
 EG_NACHT_AUS_C = 20.5
 # Takten: so viele Kompressorstarts im Fenster, Starts kurz nach einer Abtauung zaehlen
 # nicht. Danach Sperre. Die Startzeiten liegen nur im Speicher - ein Reload setzt die
 # Zaehlung zurueck (die Abschaltung kommt dann spaeter, nie zu frueh); die Sperre selbst
 # liegt im Helfer.
-# Verschaerft am 14.09.2026 : vorher 3 Starts in 60 min. In der Nacht zum 14.09.
+# Verschaerft am 14.09.2026: vorher 3 Starts in 60 min. In der Nacht zum 14.09.
 # lagen zwischen dem ersten Stopp (04:42) und der Abschaltung (05:36) 54 Minuten.
 TAKT_STARTS = 2
 TAKT_FENSTER_MINUTES = 45
@@ -595,6 +620,7 @@ class HeizungVltKompressorRegelung(Hass):
         # Am Schalter statt an den Schaltstellen: so stimmt der Helfer auch,
         # wenn jemand die WP von Hand oder eine Automation sie schaltet.
         self.listen_state(self.on_wp_schalter, WP_SWITCH)
+        self.listen_state(self.on_modus, MODUS_HELPER)
         self.run_in(self.check, 5)
         self.run_every(
             self.check,
@@ -723,12 +749,45 @@ class HeizungVltKompressorRegelung(Hass):
         )
 
     def uebergangszeit(self):
-        """Maerz-Mai und September-November (2026-09-13)."""
-        return self.datetime().month in UEBERGANG_MONATE
+        """Uebergangsregeln aktiv? Folgt dem Schalter, den der Betriebsmodus setzt."""
+        return self.get_state(UEBERGANG_SWITCH) == "on"
+
+    def ki_aktiv(self):
+        return self.get_state(MODUS_HELPER) not in (MODUS_KUEHLEN, MODUS_MANUELL)
+
+    def on_modus(self, entity, attribute, old, new, **kwargs):
+        """Betriebsmodus umgesetzt: Uebergangsschalter, Avarma-Betriebsart, Uebergabe."""
+        if new == old or new not in (MODUS_KI, MODUS_UEBERGANG, MODUS_KUEHLEN, MODUS_MANUELL):
+            return
+        if new in (MODUS_KI, MODUS_UEBERGANG):
+            dienst = "turn_on" if new == MODUS_UEBERGANG else "turn_off"
+            self.call_service(f"input_boolean/{dienst}", entity_id=UEBERGANG_SWITCH)
+        betriebsart = "Kühlen" if new == MODUS_KUEHLEN else "Heizen"
+        if self.get_state(AVARMA_MODUS_SELECT) != betriebsart:
+            self.call_service(
+                "select/select_option", entity_id=AVARMA_MODUS_SELECT, option=betriebsart
+            )
+        if new in (MODUS_KUEHLEN, MODUS_MANUELL) and old in (MODUS_KI, MODUS_UEBERGANG):
+            # Einmalige Uebergabe an die Avarma. Der VL-Sollwert bleibt, wo er steht.
+            self.call_service(
+                "select/select_option", entity_id=FAN_MODE_SELECT, option=FAN_MODE_AUTOMATISCH
+            )
+            self.call_service(
+                "number/set_value", entity_id=KOMPRESSOR_MAX_NUMBER, value=KOMPRESSOR_MAX_NORMAL
+            )
+        self.log(
+            f"Betriebsmodus {old} -> {new}: Avarma auf {betriebsart}"
+            + ("" if new in (MODUS_KI, MODUS_UEBERGANG) else ", Regelung greift nicht mehr ein"),
+            level="INFO",
+        )
+        self.run_in(self.check, 2)
 
     def nachtsperre_zeit(self):
-        hour = self.datetime().hour
-        return hour >= NACHTSPERRE_START_HOUR or hour < NACHTSPERRE_ENDE_HOUR
+        jetzt = self.datetime()
+        minute = jetzt.hour * 60 + jetzt.minute
+        start = NACHTSPERRE_START[0] * 60 + NACHTSPERRE_START[1]
+        ende = NACHTSPERRE_ENDE[0] * 60 + NACHTSPERRE_ENDE[1]
+        return minute >= start or minute < ende
 
     def taktsperre_rest_minuten(self):
         """Restdauer der Taktsperre aus dem Helfer. Unlesbar gilt als keine Sperre - wie
@@ -876,6 +935,22 @@ class HeizungVltKompressorRegelung(Hass):
         )
 
     def check(self, **kwargs):
+        if not self.ki_aktiv():
+            # Kuehlen/Manuell: nur der Heartbeat, damit der Watchdog nichts ueberschreibt.
+            # Beim Rueckwechsel startet die Regelung wie nach einem Reload.
+            self.call_service(
+                "number/set_value",
+                entity_id=HEARTBEAT_NUMBER,
+                value=int(self.datetime().timestamp()),
+            )
+            self.wp_war_an = False
+            self.rl_ziel_aktuell = None
+            self.korrektur = 0.0
+            self.kompressor_starts = []
+            self.stopp_grund = None
+            self.absenkung_wartet_seit = None
+            self.eg_warm_seit = None
+            return
         self.update_eg_haltezeit()
         self.maybe_autostart()
         if self.maybe_autostop():
@@ -1045,7 +1120,7 @@ class HeizungVltKompressorRegelung(Hass):
                 self.log(f"Autostart wartet: Taktsperre noch {rest:.0f} min", level="INFO")
             return
 
-        # Nachtsperre (2026-09-13): in der Uebergangszeit kein Start zwischen 22 und 10 Uhr,
+        # Nachtsperre (2026-09-13): in der Uebergangszeit kein Start zwischen 22:00 und 08:30,
         # ausser bei Frostprognose oder wenn das EG trotzdem auf die Untergrenze faellt.
         if self.uebergangszeit() and self.nachtsperre_zeit():
             eg = self.safe_float(EG_MITTEL_SENSOR)
@@ -1054,8 +1129,7 @@ class HeizungVltKompressorRegelung(Hass):
                 if self.cooldown_ok("nachtsperre_log", 60):
                     self.last_step["nachtsperre_log"] = self.datetime()
                     self.log(
-                        f"Autostart wartet: Nachtsperre {NACHTSPERRE_START_HOUR}-"
-                        f"{NACHTSPERRE_ENDE_HOUR} Uhr (EG {eg}°C > {EG_NACHT_UNTERGRENZE_C}°C, "
+                        f"Autostart wartet: Nachtsperre {NACHTSPERRE_TEXT} (EG {eg}°C > {EG_NACHT_UNTERGRENZE_C}°C, "
                         f"Prognose {self.safe_float(FROST_FORECAST_NUMBER)}°C > {FROST_THRESHOLD_C}°C)",
                         level="INFO",
                     )
@@ -1162,9 +1236,8 @@ class HeizungVltKompressorRegelung(Hass):
             ):
                 self.call_service("switch/turn_off", entity_id=WP_SWITCH)
                 self.log(
-                    f"WP automatisch abgeschaltet - Nachtsperre {NACHTSPERRE_START_HOUR}-"
-                    f"{NACHTSPERRE_ENDE_HOUR} Uhr und EG-Mittel {eg}°C >= {EG_NACHT_AUS_C}°C. "
-                    f"Neustart ab {NACHTSPERRE_ENDE_HOUR} Uhr bei EG <= {EG_EIN_C}°C, nachts nur "
+                    f"WP automatisch abgeschaltet - Nachtsperre {NACHTSPERRE_TEXT} und EG-Mittel {eg}°C >= {EG_NACHT_AUS_C}°C. "
+                    f"Neustart ab {NACHTSPERRE_ENDE[0]:02d}:{NACHTSPERRE_ENDE[1]:02d} Uhr bei EG <= {EG_EIN_C}°C, nachts nur "
                     f"bei EG <= {EG_NACHT_UNTERGRENZE_C}°C oder Frostprognose.",
                     level="INFO",
                 )
