@@ -100,8 +100,9 @@ Teillast ist rund 50 % effizienter – und deutlich leiser. Heizleistung grob **
 
 ### 4.2 Wann die Avarma stoppt
 
-- **Vorlauf 1 K oder mehr über dem Sollwert → sofortiger Kompressorstopp.** In einer Woche Übergangszeit war das bei 10 von 12 solchen Fällen so, darunter nie. Wer P2 per Modbus absenkt, sollte das wissen (siehe 8.2).
+- **Vorlauf über dem Sollwert → Kompressorstopp, meist binnen einer Minute.** Ausgewertet an 70 eigenen Absenkungen: Vorlauf auf oder unter dem neuen Sollwert – nie ein Stopp; 0,5 K darüber – 3 von 16; 0,8 K und mehr – 6 von 11. Wer P2 per Modbus absenkt, sollte das wissen (siehe 8.2).
 - **Ölrückführung:** Nach längerem Lauf mit niedriger Frequenz springt der Kompressor für unter eine Minute auf 50 Hz (P41). Der Vorlauf schießt dabei über den Sollwert – und die Anlage stoppt.
+- **Drosselung ab 25 °C am eingebauten Außenfühler (nicht dokumentiert):** Ab 25,0 °C nimmt die Avarma binnen 3–4 s rund 12 Hz Sollfrequenz weg (50 → 38, 60 → 48), danach weiter in 2-Hz-Schritten; darunter steigt sie um 2 Hz je ~30 s. Register 4387 („Frequency Limit Item“) bleibt dabei 0. Mit Sonne auf dem Fühler schon bei echten 19,5 °C.
 - **Übergangszeit:** Selbst die Mindestfrequenz (25 Hz) liefert oft mehr, als das Haus abnimmt. Dann taktet jede Wärmepumpe – das ist Physik, kein Defekt.
 
 ### 4.3 Durchfluss und E15
@@ -117,7 +118,7 @@ Ende August kam dann **E15 (Wasserdurchfluss)**, reproduzierbar kurz nach jedem 
 ### 4.4 Abtauung und Außenfühler
 
 - Bei mir hat die Avarma einmal **38 Minuten zu spät** abgetaut, obwohl alle Startbedingungen (P27/P28/P29/P85/P86) erfüllt waren – die Lamelle sackte von −3,5 auf −13 °C. Die Ursache ist bis heute ungeklärt. **Beim ersten Frost live mitlesen.**
-- **Der eingebaute Außenfühler** sitzt bei mir in der Sonne und lag bis zu **+3,6 K zu hoch**, bei vereister Lamelle bis zu 3,9 K zu tief. Die Anlage nutzt ihn intern trotzdem für ihre Abtau-Entscheidung.
+- **Der eingebaute Außenfühler** sitzt bei mir in der Sonne und lag bis zu **+5,5 K zu hoch**, bei vereister Lamelle bis zu 3,9 K zu tief. Die Anlage nutzt ihn intern trotzdem für ihre Abtau-Entscheidung.
 
 ## 5. Fallstricke bei Modbus und ESPHome
 
@@ -146,7 +147,7 @@ Vorweg, damit das klar ist: **Ich bin kein Programmierer.** Die Regelung ist zus
 
 ## 6. Warum überhaupt eine eigene Regelung?
 
-Kurz gesagt: Die eingebaute Heizkurve der Avarma kommt mit meinem Haus nicht gut klar. Eine statische Heizkurve reagiert nur auf die *aktuelle* Außentemperatur. Mit dem trägen Estrich ist das bei einer Frostnacht Stunden zu spät. Früher habe ich morgens von Hand hochgedreht, wenn abends Frost angesagt war. Das sollte die Regelung selbst können. Dazu soll die Anlage **so leise wie möglich** laufen – Lüfter und Kompressor nicht höher als nötig, nachts erst recht.
+Kurz gesagt: Die eingebaute Heizkurve der Avarma kommt mit meinem Haus nicht gut klar. Eine statische Heizkurve reagiert nur auf die *aktuelle* Außentemperatur. Mit dem trägen Estrich ist das bei einer Frostnacht Stunden zu spät. Früher habe ich morgens von Hand hochgedreht, wenn abends Frost angesagt war. Das sollte die Regelung selbst können.
 
 **Das Ziel:** Eine Steuerung, die
 1. das thermische Verhalten des Hauses **aus Messdaten lernt**,
@@ -214,9 +215,9 @@ Auf die Kurve kommen:
 - Die **Spreizung** wird live gemessen (Vorlauf minus Rücklauf, wenn der Kompressor läuft und der Wert plausibel ist), sonst 5 K. Die Pumpe regelt über **P58 = 5 K** selbst auf diese Differenz.
 - Die **Korrektur** ist ein langsamer Nachregler: ±0,5 K je 15 min bei bleibender Abweichung, maximal ±3 K.
 - Geschrieben wird nur bei Änderung um ganze Grad (Abweichungen ≥ 3 K sofort, sonst höchstens alle 10 min).
-- **Absenken ohne Kompressorstopp** (siehe 4.2): P2 geht nur in ganzen Grad – bei laufendem Kompressor wird deshalb nur so weit abgesenkt, dass der Vorlauf höchstens 0,8 K darüber liegt. Sitzt er genau auf dem Sollwert, wartet die Regelung, bis er von selbst etwas fällt, nach 30 min senkt sie trotzdem um 1 K.
+- **Absenken ohne Kompressorstopp** (siehe 4.2): P2 geht nur in ganzen Grad – bei laufendem Kompressor wird deshalb nur abgesenkt, wenn der Vorlauf nicht über dem neuen Sollwert liegt (bis 08.10. waren 0,8 K erlaubt – zu viel). Sonst wartet die Regelung, bis er von selbst fällt, nach 30 min senkt sie trotzdem um 1 K.
 
-**Warum so und nicht einfach „VL-Soll hoch/runter in Schritten“?** Das hatte ich vorher – und es ging schief (siehe 10., 12.09.). Solange der Sollwert über dem tatsächlichen Vorlauf „parkt“, bremst er gar nichts. Die Avarma fährt dann bis zum Kompressor-Deckel, und das Absenken in 1-K-Schritten brauchte zwei Stunden, bis es überhaupt wirkte. Mit der Vorsteuerung liegt der Sollwert immer knapp beim Vorlauf, und die **Avarma moduliert selbst** – das kann ihr eingebauter Regler nämlich gut.
+**Warum so und nicht einfach „VL-Soll hoch/runter in Schritten“?** Das hatte ich vorher (siehe 10., 12.09.): Parkt der Sollwert über dem tatsächlichen Vorlauf, bremst er nichts – die Avarma fährt bis zum Deckel, und das Absenken in 1-K-Schritten wirkte erst nach zwei Stunden. Mit der Vorsteuerung liegt der Sollwert immer knapp beim Vorlauf, und die **Avarma moduliert selbst** – das kann ihr eingebauter Regler nämlich gut.
 
 ### 8.3 Kompressor-Deckel nach Außentemperatur
 
@@ -261,7 +262,9 @@ Wegen der verspäteten Abtauung aus 4.4 taut die Regelung im Zweifel selbst ab (
 
 Lieber ein paar Stunden aus und den Estrich puffern lassen als alle 15 Minuten neu starten (siehe 4.2).
 
-**Nicht jeder Stopp ist Takten.** In der Auswertung 17.–24.09. kamen 10 von 13 Kompressorstopps mitten im Lauf von der eigenen Vorsteuerung (Absenkung) und 3 von der Ölrückführung – beide Mechanismen stehen in 4.2. Alle drei Takt-Abschaltungen dieser Woche enthielten mindestens einen solchen Stopp. Seitdem zählen Stopps bis 5 min nach einer eigenen Absenkung und bis 3 min nach dem Sprung auf 50 Hz nicht mehr mit – jeder Stopp steht mit Grund im Log.
+**Nicht jeder Stopp ist Takten.** Vom 17.–24.09. kamen 10 von 13 Stopps von der eigenen Absenkung und 3 von der Ölrückführung (4.2) – und steckten in allen drei Takt-Abschaltungen. Seitdem zählen Stopps bis 5 min nach einer eigenen Absenkung bzw. 3 min nach dem Sprung auf 50 Hz nicht mit; jeder Stopp steht mit Grund im Log.
+
+**Ergebnis 25.09.–07.10.** (13 Läufe): nur noch eine Takt-Abschaltung, echter Leistungsüberschuss (Stopps bei 26–27 Hz, Vorlauf = Soll). Sonst 7× Heizgrenze, 5× Nachtsperre. EG im Mittel 20,3 °C, Verbrauch 6,6 statt 8,7 kWh/Tag.
 
 ### 8.7 Hydraulische Lastverteilung
 
@@ -297,9 +300,9 @@ Seit Oktober wähle ich den Modus mit einem einzigen Schalter (`input_select.wp_
 ## 9. Was schon lernt – und was noch kommt
 
 ### 9.1 Heute im Einsatz
-- **Lernender Heizkurven-Offset:** Alle 5 h wird die Kurve um 0,5 K verschoben, wenn die Räume dauerhaft zu kalt oder zu warm sind (±3 K), gemessen am Bad. **In der Übergangszeit ausgesetzt:** Dort läuft die WP nur zwischen EG 20 und 21 °C an und aus – ein Offset gegen 21 °C sah praktisch immer „zu kalt“ und konnte nur steigen (1,0 → 3,0 K in drei Tagen, Rücklauf-Ziel 32–34 °C bei 11–17 °C Außentemperatur). Ebenfalls ausgesetzt, wenn der Kompressor am Limit läuft – dann ist es ein Leistungs-, kein Kurvenproblem.
-- **Gebäude-Thermometrie:** Ein RC-Modell schätzt aus nächtlichen Abkühlphasen (00–05 Uhr, keine Sonne, keine Heizung, kein Lüften) die **Zeitkonstante des Hauses**. Das ist ausdrücklich vorläufig – im Sommer ist das Temperaturgefälle zu klein. Die App stuft sich selbst erst ab 15 K Gefällespanne als „belastbar“ ein und greift bis dahin in **keinen** Regelkreis ein.
-- **Gebäudemodell mit zugeführter Wärme (seit Oktober):** Das erste Modell lernt nur aus Nächten ohne Heizung – im Winter läuft die WP aber nachts fast immer, das Modell würde genau dann verhungern, wenn es endlich gute Daten bekäme. Deshalb rechnet daneben ein zweites: *Temperaturänderung = a × (außen − innen) + b × Wärmeleistung + c*. Die Wärmeleistung kommt aus Durchfluss × Spreizung, wegen des Estrichs wird sie mit 0–8 h Verzögerung probiert. Daraus folgen zwei echte Kennzahlen: **Wärmeverlust** (W je K Temperaturunterschied) und **Wärmespeicher** (kWh, um das Haus 1 K anzuheben). Erster, noch sehr vorläufiger Stand aus nur 5 geheizten Nächten: ~360 W/K und ~54 kWh/K – also rund 9,5 kW Heizlast bei −5 °C, genau dort, wo die Avarma bei mir an ihre Grenze kommt. Belastbar erst nach etwa 15 geheizten Frostnächten.
+- **Lernender Heizkurven-Offset:** Alle 5 h wird die Kurve um 0,5 K verschoben, wenn die Räume dauerhaft zu kalt oder zu warm sind (±3 K), gemessen am Bad. **In der Übergangszeit ausgesetzt:** Dort läuft die WP nur zwischen EG 20 und 21 °C an und aus – ein Offset gegen 21 °C sah fast immer „zu kalt“ und kletterte in drei Tagen von 1 auf 3 K. Ebenfalls ausgesetzt, wenn der Kompressor am Limit läuft – dann ist es ein Leistungs-, kein Kurvenproblem.
+- **Gebäude-Thermometrie:** Ein RC-Modell schätzt aus nächtlichen Abkühlphasen (00–05 Uhr, keine Sonne, keine Heizung, kein Lüften) die **Zeitkonstante des Hauses**. Noch vorläufig, im Sommer ist das Gefälle zu klein. Die App stuft sich selbst erst ab 15 K Gefällespanne als „belastbar“ ein und greift bis dahin in **keinen** Regelkreis ein.
+- **Gebäudemodell mit zugeführter Wärme (seit Oktober):** Das erste Modell lernt nur aus Nächten ohne Heizung und würde im Winter verhungern. Deshalb rechnet daneben ein zweites: *Temperaturänderung = a × (außen − innen) + b × Wärmeleistung + c*. Die Wärmeleistung kommt aus Durchfluss × Spreizung, wegen des Estrichs wird sie mit 0–8 h Verzögerung probiert. Daraus folgen zwei echte Kennzahlen: **Wärmeverlust** (W je K Temperaturunterschied) und **Wärmespeicher** (kWh, um das Haus 1 K anzuheben). Erster, sehr vorläufiger Stand: ~360 W/K und ~54 kWh/K, also rund 9,5 kW Heizlast bei −5 °C – genau dort, wo meine Avarma an ihre Grenze kommt. Belastbar nach etwa 15 geheizten Frostnächten.
 
 ### 9.2 Das Ziel für den Winter
 - Die fest verdrahtete Vorlade-Formel durch eine **Auskühlprognose aus dem gelernten Gebäudemodell** ersetzen: „Heute Nacht −6 °C, das Haus verliert bis morgen 7 K – also jetzt so viel einlagern.“
@@ -324,6 +327,7 @@ Seit Oktober wähle ich den Modus mit einem einzigen Schalter (`input_select.wp_
 - **27.09.:** Nachtsperre endet um 08:30 statt 10:00.
 - **02.10.:** Ein Betriebsmodus-Schalter ersetzt Kalender und Einzelschalter (8.9).
 - **03.10.:** Zweites Gebäudemodell mit zugeführter Wärme (9.1) – damit lernt die Thermometrie auch im Winter weiter.
+- **08.10.:** Zweite Auswertung (8.6). Die Absenkbremse war zu großzügig (4.2) – jetzt nur noch absenken, wenn der Vorlauf nicht über dem neuen Soll liegt.
 
 **Meine wichtigsten Lehren:**
 1. **Erst messen, dann regeln.** Fast jede gute Entscheidung kam aus einer Auswertung, fast jeder Fehler aus einer Annahme.

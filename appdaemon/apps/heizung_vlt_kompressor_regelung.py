@@ -152,7 +152,11 @@ VLT_SOFORT_AB_K = 3.0
 # 1 K - dann wird gewartet, bis er von selbst etwas faellt, und nach
 # VLT_ABSENK_WARTEN_MAX_MINUTES trotzdem um 1 K gesenkt. Diesen Stopp zaehlt die
 # Takterkennung nicht (TAKT_EIGENE_ABSENKUNG_MINUTES).
-VLT_ABSENK_MAX_UEBER_K = 0.8
+# Nachgeschaerft 08.10.2026 (Auswertung 25.09.-07.10.): Die 1,0-K-Schwelle war zu
+# optimistisch. Vorlauf ueber neuem Soll <= 0 K: 0 von 43 Absenkungen mit Stopp, 0,5 K: 3 von
+# 16, >= 0,8 K: 6 von 11. Deshalb wird nur noch abgesenkt, wenn der Vorlauf nicht ueber dem
+# neuen Sollwert liegt.
+VLT_ABSENK_MAX_UEBER_K = 0.0
 VLT_ABSENK_WARTEN_MAX_MINUTES = 30
 
 # -------------------- Ruecklauf-Heizkurve (2026-07-24) --------------------
@@ -1502,7 +1506,8 @@ class HeizungVltKompressorRegelung(Hass):
             self.absenkung_wartet_seit = None
             return ziel
         # Kleinster ganzzahliger Sollwert, ueber dem der Vorlauf hoechstens
-        # VLT_ABSENK_MAX_UEBER_K liegt. Das Epsilon haelt 37,8 - 0,8 bei 37 statt 38.
+        # VLT_ABSENK_MAX_UEBER_K liegt. Das Epsilon haelt einen Vorlauf von genau 37,0 bei 37
+        # statt 38 (Gleitkomma-Rest nach der Subtraktion).
         sicher = float(math.ceil(vl - VLT_ABSENK_MAX_UEBER_K - 1e-6))
         if sicher < vlt_soll:
             self.absenkung_wartet_seit = None
@@ -1513,8 +1518,8 @@ class HeizungVltKompressorRegelung(Hass):
             self.absenkung_wartet_seit = now
             self.log(
                 f"VL-Soll-Absenkung {vlt_soll:.0f}->{ziel:.0f}°C zurueckgestellt: Vorlauf "
-                f"{vl:.1f}°C sitzt auf dem Sollwert, schon 1 K weniger wuerde den Kompressor "
-                f"stoppen. Spaetestens in {VLT_ABSENK_WARTEN_MAX_MINUTES} min trotzdem.",
+                f"{vl:.1f}°C liegt ueber {vlt_soll - 1:.0f}°C, schon 1 K weniger wuerde den "
+                f"Kompressor stoppen. Spaetestens in {VLT_ABSENK_WARTEN_MAX_MINUTES} min trotzdem.",
                 level="INFO",
             )
         gewartet = (now - self.absenkung_wartet_seit).total_seconds() / 60
