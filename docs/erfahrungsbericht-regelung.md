@@ -139,6 +139,7 @@ Wenn der Kompressor am Deckel hängt, reicht die Wärme nicht für alle Kreise. 
 ### 3.8 Schutzschicht, unabhängig von der Regelung
 
 - **Heartbeat-Watchdog im ESP** (siehe 2.)
+- **Modbus-Wächter:** Antwortet die Avarma nicht mehr, meldet der ESP das über einen eigenen Sensor. Die Regelung pausiert dann (nur der Heartbeat läuft weiter, damit der Watchdog nicht anspringt) und schickt nach 10 min eine Push-Nachricht.
 - **Zwei Handschalter:** Autostart erlaubt/gesperrt, automatische Abschaltungen erlaubt/gesperrt
 - **Interim-Durchflussschutz** (siehe Avarma-Wiki 4.3): Aus bei laufendem Kompressor und Spreizung > 10 K oder Pumpe < 30 %
 
@@ -188,7 +189,7 @@ Seit Oktober wähle ich den Modus mit einem einzigen Schalter (`input_select.wp_
 - **27.09.:** Nachtsperre endet um 08:30 statt 10:00.
 - **02.10.:** Ein Betriebsmodus-Schalter ersetzt Kalender und Einzelschalter (3.9).
 - **03.10.:** Zweites Gebäudemodell mit zugeführter Wärme (4.1) – damit lernt die Thermometrie auch im Winter weiter.
-- **08.10.:** Zweite Auswertung (3.6). Die Absenkbremse war zu großzügig (Avarma-Wiki 4.2) – jetzt nur noch absenken, wenn der Vorlauf nicht über dem neuen Soll liegt.
+- **08.10.:** Zweite Auswertung (3.6). Die Absenkbremse war zu großzügig (Avarma-Wiki 4.2) – jetzt nur noch absenken, wenn der Vorlauf nicht über dem neuen Soll liegt. Am selben Tag: Die Avarma hatte am 05. und 08.10. stundenlang nicht auf Modbus geantwortet – die Regelung arbeitete fünf Stunden gegen eingefrorene Werte. Verdacht: Seit ESPHome 2026.9 wirkt `skip_updates` nicht mehr, alle ~150 Parameter liefen alle 10 s. Behoben mit langsameren Zusatz-Controllern, dazu der Modbus-Wächter (3.8).
 
 **Meine wichtigsten Lehren:**
 1. **Erst messen, dann regeln.** Fast jede gute Entscheidung kam aus einer Auswertung, fast jeder Fehler aus einer Annahme.

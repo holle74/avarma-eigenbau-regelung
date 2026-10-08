@@ -84,6 +84,18 @@ EG_MITTEL_SENSOR = "sensor.wp_raumtemperatur_mittel_eg"
 TAKTSPERRE_HELPER = "input_datetime.wp_taktsperre_bis"
 
 HEARTBEAT_NUMBER = "number.controllroom_esphome_web_avarma_agent_heartbeat"
+# Modbus-Verbindung ESP <-> Avarma (template binary_sensor im ESP, on_offline/on_online
+# am modbus_controller). Bei einem Aussetzer behaelt der ESP alle letzten Werte - am
+# 08.10.2026 hat die Regelung fuenf Stunden lang gegen eingefrorene 38 Grad Vorlauf
+# abgesenkt, und kein Befehl kam an. Solange "off": nur Heartbeat, sonst nichts.
+# Fehlt die Entity (Firmware ohne den Sensor) oder ist sie unavailable, gilt online.
+MODBUS_ONLINE_SENSOR = "binary_sensor.controllroom_esphome_web_avarma_modbus_online"
+# Push erst, wenn der Ausfall so lange anhaelt - kurze Aussetzer nur ins Log.
+MODBUS_PUSH_NACH_MINUTES = 10
+# Nach der Rueckkehr liefern die Sensoren auf einen Schlag neue Werte. Ein Frequenz-
+# sprung in dieser Zeit ist kein echter Kompressorstart/-stopp.
+MODBUS_NACHLAUF_MINUTES = 3
+NOTIFY_SERVICE = "notify/notify"  # eigenen Dienst eintragen, z. B. notify/mobile_app_<handy>, oder per apps.yaml notify_service
 FROST_FORECAST_NUMBER = "input_number.wp_prognose_aussentemperatur_minimum_24h"
 
 # Spender-Raeume der hydraulischen Lastverteilung (heizung_lastverteilung.py) -
@@ -620,6 +632,12 @@ class HeizungVltKompressorRegelung(Hass):
         self.vlt_abgesenkt_um = None
         self.absenkung_wartet_seit = None
         self.eg_warm_seit = None
+        self.modbus_zurueck_um = None
+        self.modbus_push_gesendet = False
+        self.notify_service = self.args.get("notify_service", NOTIFY_SERVICE)
+        self.listen_state(self.on_modbus_offline, MODBUS_ONLINE_SENSOR, new="off",
+                          duration=MODBUS_PUSH_NACH_MINUTES * 60)
+        self.listen_state(self.on_modbus_wechsel, MODBUS_ONLINE_SENSOR)
         self.listen_state(self.on_kompressor_frequenz, KOMPRESSOR_IST_SENSOR)
         # Am Schalter statt an den Schaltstellen: so stimmt der Helfer auch,
         # wenn jemand die WP von Hand oder eine Automation sie schaltet.
@@ -632,6 +650,55 @@ class HeizungVltKompressorRegelung(Hass):
             CHECK_INTERVAL_SECONDS,
         )
         self.log("Heizung VLT/Kompressor/Luefter-Regelung gestartet", level="INFO")
+
+    def modbus_offline(self):
+        """True nur bei ausdruecklich gemeldetem Ausfall (siehe MODBUS_ONLINE_SENSOR)."""
+        return self.get_state(MODBUS_ONLINE_SENSOR) == "off"
+
+    def modbus_nachlauf(self):
+        if self.modbus_zurueck_um is None:
+            return False
+        return (self.datetime() - self.modbus_zurueck_um).total_seconds() / 60 < MODBUS_NACHLAUF_MINUTES
+
+    def on_modbus_wechsel(self, entity, attribute, old, new, **kwargs):
+        if new == "off":
+            self.log(
+                "Modbus-Verbindung zur Avarma ausgefallen - Werte sind eingefroren, "
+                "Regelung pausiert (nur Heartbeat)",
+                level="WARNING",
+            )
+        elif new == "on" and old == "off":
+            self.modbus_zurueck_um = self.datetime()
+            # Was waehrend des Ausfalls gemessen schien, war nur der letzte Wert -
+            # Zeitstempel daraus nicht weiterverwenden.
+            self.kompressor_starts = []
+            self.stopp_grund = None
+            self.oel_sprung_um = None
+            self.kompressor_an_seit = None
+            self.absenkung_wartet_seit = None
+            self.am_deckel_since = None
+            self.vereist_seit = None
+            self.log("Modbus-Verbindung zur Avarma wieder da - Regelung laeuft weiter", level="WARNING")
+            if self.modbus_push_gesendet:
+                self.modbus_push_gesendet = False
+                self.call_service(
+                    self.notify_service,
+                    title="♨️ Avarma wieder erreichbar",
+                    message="Die Modbus-Verbindung steht wieder, die Regelung arbeitet normal weiter.",
+                )
+
+    def on_modbus_offline(self, entity, attribute, old, new, **kwargs):
+        self.modbus_push_gesendet = True
+        self.call_service(
+            self.notify_service,
+            title="♨️ Avarma antwortet nicht",
+            message=(
+                f"Seit {MODBUS_PUSH_NACH_MINUTES} min keine Modbus-Antwort von der Avarma. "
+                "Die Werte in Home Assistant sind eingefroren, die Regelung pausiert. "
+                "Die Anlage laeuft mit ihren letzten Einstellungen weiter."
+            ),
+            data={"priority": "high", "ttl": 0},
+        )
 
     def safe_float(self, entity_id, attribute=None, default=None):
         raw = self.get_state(entity_id, attribute=attribute) if attribute else self.get_state(entity_id)
@@ -809,6 +876,9 @@ class HeizungVltKompressorRegelung(Hass):
             neu = float(new)
         except (TypeError, ValueError):
             return
+        if self.modbus_offline() or self.modbus_nachlauf():
+            # Sprung zwischen eingefrorenem und frischem Wert, kein echter Start/Stopp.
+            return
         now = self.datetime()
         if alt >= KOMPRESSOR_LAEUFT_HZ > neu:
             self.on_kompressor_stopp(now, alt)
@@ -954,6 +1024,16 @@ class HeizungVltKompressorRegelung(Hass):
             self.stopp_grund = None
             self.absenkung_wartet_seit = None
             self.eg_warm_seit = None
+            return
+        if self.modbus_offline():
+            # Heartbeat weiter, damit der Watchdog nach der Rueckkehr nicht auf
+            # 32 Grad / 90 Hz springt. Alles andere wuerde auf eingefrorenen Werten
+            # entscheiden, und Schreibbefehle kommen ohnehin nicht an.
+            self.call_service(
+                "number/set_value",
+                entity_id=HEARTBEAT_NUMBER,
+                value=int(self.datetime().timestamp()),
+            )
             return
         self.update_eg_haltezeit()
         self.maybe_autostart()

@@ -132,6 +132,10 @@ ALLE_DONORS = DONORS + [WOHNZIMMER_DONOR]
 # "am Deckel" benutzen und nicht gegeneinander arbeiten.
 KOMPRESSOR_IST_SENSOR = "sensor.esphome_web_avarma_kompressor_frequenz_ist"
 KOMPRESSOR_MAX_NUMBER = "number.esphome_web_avarma_kompressor_maximalfrequenz"
+# Modbus-Verbindung zur Avarma (siehe heizung_vlt_kompressor_regelung.py). Faellt sie aus,
+# stehen Kompressor und Deckel auf ihrem letzten Wert - "am Deckel" waere dann eine
+# Momentaufnahme von vor Stunden. Solange "off": nichts aendern, Raeume bleiben wie sie sind.
+MODBUS_ONLINE_SENSOR = "binary_sensor.controllroom_esphome_web_avarma_modbus_online"
 KOMPRESSOR_AM_DECKEL_TOLERANZ_HZ = 3.0
 # Der Kompressor faellt beim Abtauen und bei der Oelrueckfuehrung kurz auf 0 Hz,
 # ohne dass der Engpass vorbei waere. Erst wenn er laenger als das unter dem
@@ -279,6 +283,8 @@ class HeizungLastverteilung(Hass):
         return entspannt_min < ERZEUGER_ENTSPANNT_MINUTES
 
     def check(self, **kwargs):
+        if self.get_state(MODBUS_ONLINE_SENSOR) == "off":
+            return
         wp_on = self.get_state("switch.esphome_web_avarma_warmepumpe_ein_aus") == "on"
         modus = self.get_state(MODUS_HELPER)
 

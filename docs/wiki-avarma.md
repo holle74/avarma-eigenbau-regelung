@@ -119,8 +119,8 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 - **Adressen einzeln prüfen:** In einer Konfiguration lag P114 auf der Adresse von P115 (Vorlauf-Übertemperaturschutz) – ein Schreibzugriff hätte die Anlage in Dauerstörung geschickt.
 - **4369 „Temperaturdifferenz Hauptkreis“ ist nicht die VL/RL-Spreizung** (0–1,8 K bei tatsächlich 4,5–6 K). Die Spreizung selbst aus Vor- und Rücklauf berechnen.
 - **Funktionscode 3 liest höchstens 125 Register am Stück.** ESPHome fasst benachbarte Register zusammen; ein zu großer Block scheitert komplett und reißt alle Werte darin mit (`force_new_range` hilft).
-- **Der ESP behält bei fehlender Modbus-Antwort die letzten Werte.** Eine stromlose Anlage sieht in Home Assistant aus wie eine ruhig laufende.
-- **Parameterregister** nur alle paar Minuten lesen (`skip_updates`). Direkt nach dem Schreiben zeigt der Lesewert noch den alten Stand – das ist kein Fehler.
+- **Der ESP behält bei fehlender Modbus-Antwort die letzten Werte.** Eine stromlose oder nicht antwortende Anlage sieht in Home Assistant aus wie eine ruhig laufende. Abhilfe: `on_offline`/`on_online` am `modbus_controller` auf einen eigenen Sensor „Modbus online“ legen (Beispiel im Repo).
+- **Parameterregister** nur alle paar Minuten lesen. **`skip_updates` wirkt ab ESPHome 2026.9 nicht mehr** – dann wird alles im Takt des Controllers gelesen. Stattdessen weitere `modbus_controller` mit derselben Adresse und längerem `update_interval` anlegen. Mehrstündige Modbus-Aussetzer traten bei einer Anlage erst auf, nachdem alle ~150 Parameter alle 10 s gelesen wurden *(1 Anlage, Zusammenhang noch nicht bestätigt)*. Direkt nach dem Schreiben zeigt der Lesewert noch den alten Stand – das ist kein Fehler.
 - **P45 und andere Parameterregister selten schreiben:** Ob die Avarma jeden Schreibvorgang ins EEPROM sichert, ist nicht bekannt. Vorsichtshalber selten schreiben – die Regelung aus dem Erfahrungsbericht schreibt P45 nur 2–4-mal pro Tag.
 [/details]
 

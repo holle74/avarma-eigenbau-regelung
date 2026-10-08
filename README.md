@@ -75,6 +75,8 @@ Anlegen über *Einstellungen → Geräte & Dienste → Helfer*.
 
 Der **Heartbeat-Watchdog** im ESP setzt Vorlauf-Soll und Kompressor-Maximum nach 30 Minuten ohne Befehl auf 32 °C / 90 Hz zurück. So bleibt die Anlage auch bei Ausfall von Home Assistant heizfähig.
 
+Der Sensor **„Modbus online“** im ESP meldet, wenn die Avarma nicht mehr auf Modbus antwortet (der ESP behält sonst einfach die letzten Werte). Die Regelung pausiert dann und schickt nach 10 Minuten eine Push-Nachricht – den Notify-Dienst in `NOTIFY_SERVICE` oder per `notify_service` in `apps.yaml` eintragen.
+
 ## Wichtige Fallstricke (Kurzfassung)
 
 - **Zwei Adressspalten in der Hofman-Modbus-Tabelle.** „Decimal“ ist die echte Modbus-Adresse, „Decimal+1“ nur die Panel-Anzeige. Hier lag P114 deshalb auf 8303 – das ist P115, der Vorlauf-Übertemperaturschutz.
