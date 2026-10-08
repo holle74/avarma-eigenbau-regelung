@@ -5,7 +5,7 @@ Eine selbst gebaute, datengetriebene Regelung für die **Hofman Avarma 12 kW Mon
 (rund 1.000 m Heizrohr, 12 Heizkreise, 15 cm Verlegeabstand), in dem die Anlage im Winter an ihrer
 Leistungsgrenze läuft.
 
-Hintergrund, Regellogik und Projektgeschichte stehen im Forumsbeitrag (siehe `docs/forum-wiki-beitrag.md`).
+Hintergrund, Regellogik und Projektgeschichte stehen im Regelungs-Wiki (`docs/wiki-regelung.md`), alles zur Anlage selbst im Avarma-Wiki (`docs/wiki-avarma.md`).
 Dieses Repo enthält den Code dazu.
 
 > ⚠️ **Auf eigene Gefahr.** Die Regelung **schreibt Register der Wärmepumpe** (Vorlauf-Sollwert,
@@ -26,7 +26,8 @@ Dieses Repo enthält den Code dazu.
 | `appdaemon/apps/apps.yaml` | AppDaemon-Konfiguration der vier Apps |
 | `homeassistant/automations.yaml` | Frost-Vorschau aus der Wetterprognose, Interim-Durchflussschutz |
 | `homeassistant/www/heizung/wp-modus-card.js` | Dashboard-Karte für den Betriebsmodus (nach `/config/www/heizung/` kopieren, als Ressource `/local/heizung/wp-modus-card.js` vom Typ *module* anlegen, Kartentyp `custom:wp-modus-card`) |
-| `docs/forum-wiki-beitrag.md` | Ausführliche Beschreibung (Warum, Aufbau, Regellogik, Geschichte, Fallstricke) |
+| `docs/wiki-avarma.md` | Avarma-Wiki: Anlage, Modbus-Register, Parameter, Messwerte, Fallstricke |
+| `docs/wiki-regelung.md` | Regelungs-Wiki: Warum, Aufbau, Regellogik, Geschichte, Fallstricke |
 
 ## Voraussetzungen
 
@@ -84,7 +85,7 @@ Der **Heartbeat-Watchdog** im ESP setzt Vorlauf-Soll und Kompressor-Maximum nach
 - **Der Durchflussmesser (4368)** lieferte hier nie plausible Werte.
 - **AppDaemon `set_state`** lässt Attribute mit `0`, `False` oder `None` stillschweigend weg – Werte, die legitim 0 werden können, als String setzen.
 
-Ausführlich: `docs/forum-wiki-beitrag.md`.
+Ausführlich: `docs/wiki-avarma.md` (Anlage) und `docs/wiki-regelung.md` (Regelung).
 
 ## Entstehung
 
