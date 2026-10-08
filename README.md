@@ -5,7 +5,7 @@ Eine selbst gebaute, datengetriebene Regelung für die **Hofman Avarma 12 kW Mon
 (rund 1.000 m Heizrohr, 12 Heizkreise, 15 cm Verlegeabstand), in dem die Anlage im Winter an ihrer
 Leistungsgrenze läuft.
 
-Hintergrund, Regellogik und Projektgeschichte stehen im Erfahrungsbericht (`docs/erfahrungsbericht-regelung.md`), alles zur Anlage selbst im Avarma-Wiki (`docs/wiki-avarma.md`).
+Hintergrund, Regellogik und Projektgeschichte stehen im Erfahrungsbericht (`docs/erfahrungsbericht-regelung.md`), alles zur Anlage selbst im Avarma-Wiki (`docs/wiki-avarma.md`, im Forum: https://akkudoktor.net/t/wiki-avarma-290-waermepumpe-monoblock/41521).
 Dieses Repo enthält den Code dazu.
 
 > ⚠️ **Auf eigene Gefahr.** Die Regelung **schreibt Register der Wärmepumpe** (Vorlauf-Sollwert,

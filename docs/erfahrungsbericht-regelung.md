@@ -2,7 +2,7 @@
 
 Hallo zusammen,
 
-das hier ist ein **Erfahrungsbericht**: wie ich meine **Hofman Avarma** mit einer eigenen Regelung betreibe, warum ich es so gelöst habe und was ich dabei gelernt habe. Es ist mein Weg, nicht der einzige. Allgemeines Wissen zur Anlage selbst – Modbus, Parameter, Messwerte, Fallstricke – steht im **Avarma-Wiki: [Link zum Avarma-Wiki]**. Verweise wie „Avarma-Wiki 4.2“ meinen die Abschnitte dort.
+das hier ist ein **Erfahrungsbericht**: wie ich meine **Hofman Avarma** mit einer eigenen Regelung betreibe, warum ich es so gelöst habe und was ich dabei gelernt habe. Es ist mein Weg, nicht der einzige. Allgemeines Wissen zur Anlage selbst – Modbus, Parameter, Messwerte, Fallstricke – steht im **Avarma-Wiki: https://akkudoktor.net/t/wiki-avarma-290-waermepumpe-monoblock/41521**. Verweise wie „Avarma-Wiki 4.2“ meinen die Abschnitte dort.
 
 Vorweg, damit das klar ist: **Ich bin kein Programmierer.** Die Regelung ist zusammen mit **Claude** entstanden, einer KI von Anthropic (mehr dazu in Abschnitt 7). Sie läuft seit dem Sommer und wird laufend nachgeschärft – **wer Ideen hat, wie man etwas besser lösen kann: immer her damit.**
 
