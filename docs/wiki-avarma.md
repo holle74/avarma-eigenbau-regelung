@@ -4,7 +4,7 @@ Dieser Artikel sammelt Wissen zur Wärmepumpe **Hofman Avarma**: Modbus-Anbindun
 
 **Belegstand:** Viele Angaben stammen bisher von einer einzigen Anlage (Avarma V2, 12 kW, 230 V). Sie sind mit *(1 Anlage)* markiert. Wer sie an seiner Anlage bestätigen oder widerlegen kann, bitte die Markierung anpassen oder eine Anmerkung ergänzen – Anlagen und Firmwarestände können sich unterscheiden.
 
-Eine vollständige externe Regelung über ESPHome, Home Assistant und AppDaemon ist im **Regelungs-Wiki** beschrieben: **[Link zum Regelungs-Wiki]**. Verweise wie „Regelungs-Wiki 3.2“ meinen die Abschnitte dort.
+Eine vollständige externe Regelung über ESPHome, Home Assistant und AppDaemon beschreibt ein **Erfahrungsbericht**: **[Link zum Erfahrungsbericht]**. Verweise wie „Erfahrungsbericht 3.2“ meinen die Abschnitte dort.
 
 ---
 
@@ -50,7 +50,7 @@ Die Tabelle hilft, Messwerte und Parameter einzuordnen. Bitte eigene Anlagen erg
 | **P86** Abtau-Differenz ΔT1 (Außen ≥ −7 °C) | 8,0 K | **5,0 K** | Lässt die Abtauung früher zu (Hintergrund siehe 4.4). **P91**, dieselbe Differenz unter −7 °C, bleibt auf 8,0 K. |
 | **P63** Warmwasserfunktion | 1 | **0** | Bei Anlagen ohne Warmwasserspeicher. |
 | **P68** Durchflussfühler-Typ | 1 (Durchflussmesser) | 0 (Strömungsschalter) | **Nur mit Freigabe des Herstellers**, etwa als Übergang bei defektem Durchflussmesser. Damit entfällt die Mindestdurchfluss-Prüfung (siehe 4.3). |
-| **P71 / P72** Lüftersteuerung / Solldrehzahl | Automatik | Manuell, z. B. 400–900 U/min | Deutlich leiser – aber nur zusammen mit einer externen Regelung, die die Drehzahl nach der Verdampfertemperatur nachführt (Regelungs-Wiki 3.4). Sonst droht Vereisung. |
+| **P71 / P72** Lüftersteuerung / Solldrehzahl | Automatik | Manuell, z. B. 400–900 U/min | Deutlich leiser – aber nur zusammen mit einer externen Regelung, die die Drehzahl nach der Verdampfertemperatur nachführt (Erfahrungsbericht 3.4). Sonst droht Vereisung. |
 
 ### 3.2 Wichtige Werkseinstellungen
 
@@ -93,7 +93,7 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 
 ### 4.2 Kompressorstopps und Drosselung
 
-- **Vorlauf über dem Sollwert:** Wird P2 so abgesenkt, dass der Vorlauf darüber liegt, stoppt der Kompressor meist binnen einer Minute. Ausgewertet an 70 Absenkungen *(1 Anlage)*: Vorlauf auf oder unter dem neuen Sollwert – nie ein Stopp; 0,5 K darüber – 3 von 16; 0,8 K und mehr – 6 von 11. Für externe Regelungen, die P2 schreiben, ist das entscheidend (Regelungs-Wiki 3.2).
+- **Vorlauf über dem Sollwert:** Wird P2 so abgesenkt, dass der Vorlauf darüber liegt, stoppt der Kompressor meist binnen einer Minute. Ausgewertet an 70 Absenkungen *(1 Anlage)*: Vorlauf auf oder unter dem neuen Sollwert – nie ein Stopp; 0,5 K darüber – 3 von 16; 0,8 K und mehr – 6 von 11. Für externe Regelungen, die P2 schreiben, ist das entscheidend (Erfahrungsbericht 3.2).
 - **Ölrückführung:** Nach längerem Lauf mit niedriger Frequenz springt der Kompressor für unter eine Minute auf die Frequenz aus P41 (50 Hz). Der Vorlauf schießt dabei über den Sollwert, und die Anlage kann stoppen.
 - **Drosselung ab 25 °C am eingebauten Außenfühler** (nicht dokumentiert, *1 Anlage*): Erreicht der Fühler 25,0 °C, nimmt die Avarma binnen 3–4 s rund 12 Hz Sollfrequenz weg (50 → 38, 60 → 48 Hz), bei anhaltender Überschreitung weiter in 2-Hz-Schritten. Fällt er darunter, steigt die Frequenz um 2 Hz je ~30 s. Register 4387 bleibt dabei 0. Steht der Fühler in der Sonne, tritt das schon bei tatsächlich 19,5 °C auf (siehe 4.4).
 - **Übergangszeit:** Selbst die Mindestfrequenz liefert oft mehr Wärme, als das Gebäude abnimmt. Dann taktet jede Wärmepumpe – das ist Physik, kein Defekt.
@@ -102,7 +102,7 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 
 **Symptome eines defekten Durchflussmessers** *(1 Anlage)*: Register 4368 liefert nur 0 oder unplausible 119–149 L/min. Später kommt **E15 (Wasserdurchfluss)**, reproduzierbar kurz nach jedem Kompressorstart, obwohl die Hydraulik in Ordnung ist. Im bekannten Fall hat der Hersteller den Defekt anerkannt und Ersatz auf Kulanz zugesagt.
 
-**Übergangslösung:** Mit Herstellerfreigabe auf **P68 = 0 (Strömungsschalter)** umstellen. Damit entfällt die Mindestdurchfluss-Prüfung gegen P61 – ein eigener Ersatzschutz ist dann sinnvoll (Beispiel: Regelungs-Wiki 3.8).
+**Übergangslösung:** Mit Herstellerfreigabe auf **P68 = 0 (Strömungsschalter)** umstellen. Damit entfällt die Mindestdurchfluss-Prüfung gegen P61 – ein eigener Ersatzschutz ist dann sinnvoll (Beispiel: Erfahrungsbericht 3.8).
 
 **Durchfluss ohne Messer abschätzen:** **Durchfluss [L/min] ≈ Pumpenleistung [%] × 0,22** (kalibriert an einer Anlage: ~23 L/min bei 100 %). Thermische Leistung: **Durchfluss × Spreizung × 0,0698 = kW** (4,186 kJ/kg·K ÷ 60). Das ist kein Messwert, sondern die Sollförderung der Pumpe – für COP-Auswertungen und Plausibilitätsprüfungen reicht es.
 
@@ -121,7 +121,7 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 - **Funktionscode 3 liest höchstens 125 Register am Stück.** ESPHome fasst benachbarte Register zusammen; ein zu großer Block scheitert komplett und reißt alle Werte darin mit (`force_new_range` hilft).
 - **Der ESP behält bei fehlender Modbus-Antwort die letzten Werte.** Eine stromlose Anlage sieht in Home Assistant aus wie eine ruhig laufende.
 - **Parameterregister** nur alle paar Minuten lesen (`skip_updates`). Direkt nach dem Schreiben zeigt der Lesewert noch den alten Stand – das ist kein Fehler.
-- **P45 und andere Parameterregister selten schreiben:** Ob die Avarma jeden Schreibvorgang ins EEPROM sichert, ist nicht bekannt. Vorsichtshalber selten schreiben – die Regelung aus dem Regelungs-Wiki schreibt P45 nur 2–4-mal pro Tag.
+- **P45 und andere Parameterregister selten schreiben:** Ob die Avarma jeden Schreibvorgang ins EEPROM sichert, ist nicht bekannt. Vorsichtshalber selten schreiben – die Regelung aus dem Erfahrungsbericht schreibt P45 nur 2–4-mal pro Tag.
 [/details]
 
 [details="Skalierungen und ESPHome"]
@@ -134,7 +134,7 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 
 ## 6. Konfiguration und Mitarbeit
 
-**Beispielkonfiguration:** https://github.com/holle74/avarma-eigenbau-regelung – vollständige ESPHome-Konfiguration für alle Register, dazu die Regelung aus dem Regelungs-Wiki.
+**Beispielkonfiguration:** https://github.com/holle74/avarma-eigenbau-regelung – vollständige ESPHome-Konfiguration für alle Register, dazu die Regelung aus dem Erfahrungsbericht.
 
 > ⚠️ **Auf eigene Gefahr.** Vor dem Schreiben von Registern erst nur mitlesen, jeden Wert am Panel gegenprüfen und schreibende Entities einzeln freischalten. Garantiefragen klärt jeder selbst.
 

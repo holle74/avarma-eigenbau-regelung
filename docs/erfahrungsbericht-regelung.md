@@ -1,8 +1,8 @@
-# Hofman Avarma – eigene Regelung mit ESPHome, Home Assistant und AppDaemon (Wiki)
+# Erfahrungsbericht: eigene Regelung für die Hofman Avarma mit ESPHome, Home Assistant und AppDaemon
 
 Hallo zusammen,
 
-das ist der zweite Teil zur **Hofman Avarma**: meine eigene Regelung. Alles zur Anlage selbst – Modbus, Parameter, Messwerte, Fallstricke – steht im **Avarma-Wiki: [Link zum Avarma-Wiki]**. Verweise wie „Avarma-Wiki 4.2“ meinen die Abschnitte dort. Auch dieser Beitrag ist ein **Wiki** – ergänzen ausdrücklich erwünscht.
+das hier ist ein **Erfahrungsbericht**: wie ich meine **Hofman Avarma** mit einer eigenen Regelung betreibe, warum ich es so gelöst habe und was ich dabei gelernt habe. Es ist mein Weg, nicht der einzige. Allgemeines Wissen zur Anlage selbst – Modbus, Parameter, Messwerte, Fallstricke – steht im **Avarma-Wiki: [Link zum Avarma-Wiki]**. Verweise wie „Avarma-Wiki 4.2“ meinen die Abschnitte dort.
 
 Vorweg, damit das klar ist: **Ich bin kein Programmierer.** Die Regelung ist zusammen mit **Claude** entstanden, einer KI von Anthropic (mehr dazu in Abschnitt 7). Sie läuft seit dem Sommer und wird laufend nachgeschärft – **wer Ideen hat, wie man etwas besser lösen kann: immer her damit.**
 
@@ -224,6 +224,6 @@ Enthalten: ESPHome-Konfiguration, die vier AppDaemon-Apps, die zwei Automationen
 
 > ⚠️ **Auf eigene Gefahr.** Die Regelung schreibt Register der Wärmepumpe. Jede Anlage und jeder Firmwarestand kann abweichen. Bitte erst nur lesen, jeden Wert am Panel gegenprüfen und schreibende Entities einzeln freischalten. Garantiefragen klärt jeder selbst.
 
-**Mitmachen:** Eure Anlagendaten und Parameter gehören ins Avarma-Wiki. Zur Regelung bin ich für Ideen offen: Wie geht ihr mit dem Takten in der Übergangszeit um? Wie haltet ihr die Anlage nachts leise? Regelt jemand vorausschauend nach Wetterprognose? Gern hier im Thread oder als Issue im Repo.
+**Mitmachen:** Eure Anlagendaten und Parameter gehören ins Avarma-Wiki. Zur Regelung bin ich für Ideen offen: Wie geht ihr mit dem Takten in der Übergangszeit um? Wie haltet ihr die Anlage nachts leise? Regelt jemand vorausschauend nach Wetterprognose? Gern als Antwort auf diesen Beitrag oder als Issue im Repo.
 
 Viele Grüße
