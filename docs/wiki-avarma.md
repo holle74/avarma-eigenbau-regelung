@@ -4,7 +4,7 @@ Dieser Artikel sammelt Wissen zur Wärmepumpe **Hofman Avarma**: Modbus-Anbindun
 
 **Belegstand:** Viele Angaben stammen bisher von einer einzigen Anlage (Avarma V2, 12 kW, 230 V). Sie sind mit *(1 Anlage)* markiert. Wer sie an seiner Anlage bestätigen oder widerlegen kann, bitte die Markierung anpassen oder eine Anmerkung ergänzen – Anlagen und Firmwarestände können sich unterscheiden.
 
-Eine vollständige externe Regelung über ESPHome, Home Assistant und AppDaemon beschreibt der Beitrag **„Fast intelligente Heizungssteuerung mit einer Avarma 12 kW“**: **[Link zum Beitrag]**. Verweise wie „Steuerung, Baustein 2“ meinen die Abschnitte dort.
+Eine vollständige externe Regelung über ESPHome, Home Assistant und AppDaemon beschreibt der Beitrag **„Fast intelligente Heizungssteuerung mit einer Avarma 12 kW“**: https://akkudoktor.net/t/projekt-fast-intelligente-heizungssteuerung-mit-einer-avarma-12-kw-waermepumpe/42069. Verweise wie „Steuerung, Baustein 2“ meinen die Abschnitte dort.
 
 ---
 
