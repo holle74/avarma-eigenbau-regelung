@@ -14,7 +14,7 @@ Die Tabelle hilft, Messwerte und Parameter einzuordnen. Bitte eigene Anlagen erg
 
 | Forumsname | Modell / Version | Leistung / Spannung | Wärmeabgabe | Besonderheiten |
 |---|---|---|---|---|
-| holle74 | Avarma V2 Monoblock, R290 | 12 kW / 230 V | Estrich-FBH, 12 Kreise, ~1.000 m Rohr, 15 cm Verlegeabstand | nur Heizbetrieb (P63 = 0), Durchflussmesser defekt (siehe 4.3), Leistungsgrenze ab ca. −5 °C |
+| holle74 | Avarma V2 Monoblock, R290 | 12 kW / 230 V | Estrich-FBH, 12 Kreise, ~1.000 m Rohr, 15 cm Verlegeabstand | nur Heizbetrieb (P63 = 0), Durchflussmesser getauscht, Anzeige unplausibel (siehe 4.3), Leistungsgrenze ab ca. −5 °C |
 | | | | | |
 
 ## 2. Modbus-Anbindung
@@ -32,7 +32,7 @@ Die Tabelle hilft, Messwerte und Parameter einzuordnen. Bitte eigene Anlagen erg
 | 4097 | Betriebsmodus | vor Tests prüfen – „Kühlen“ wird leicht übersehen |
 | 4098 | P2 Vorlauf-Soll | steht nach einem Neustart der Anlage auf 45 °C *(1 Anlage)* |
 | 4103 | Abtauung erzwingen | |
-| 4368 | Durchfluss | bei defektem Messer unbrauchbar (siehe 4.3) |
+| 4368 | Durchfluss | bei defektem oder unpassendem Messer unbrauchbar (siehe 4.3) |
 | 4369 | „Temperaturdifferenz Hauptkreis“ | **nicht** die VL/RL-Spreizung |
 | 4387 | Frequency Limit Item | Grund einer Frequenzbegrenzung (Bits: T3-Coil, Hochdruck, AC-Spannung, Heißgas, AC-Strom) – zeigt die 25-°C-Drosselung **nicht** an (siehe 4.2) |
 | 4390 / 4391 | Fault State 0 (E01–E16) / 1 (E17–E32) | E15 = Bit 14 → Anzeigewert 16384 |
@@ -48,6 +48,7 @@ Die Tabelle hilft, Messwerte und Parameter einzuordnen. Bitte eigene Anlagen erg
 | **P114** Frequenzreduktion bei erreichtem VL-Soll | 2 % | **3 %** | Mehr Spielraum zum Herunterregeln: Die Anlage moduliert länger, statt abzuschalten. Mit dem Werkswert reagiert sie träge und taktet eher *(1 Anlage)*. |
 | **P46** Kompressor-Mindestfrequenz | 35 Hz | **25 Hz** | Größerer Modulationsbereich nach unten. In der Übergangszeit liegt der Wärmebedarf oft unter der Mindestleistung – je tiefer sie liegt, desto seltener taktet die Anlage. |
 | **P86** Abtau-Differenz ΔT1 (Außen ≥ −7 °C) | 8,0 K | **5,0 K** | Lässt die Abtauung früher zu (Hintergrund siehe 4.4). **P91**, dieselbe Differenz unter −7 °C, bleibt auf 8,0 K. |
+| **P85** Abtau-Außentemperaturgrenze | 8 °C | **15 °C** | Oberhalb dieser Temperatur am eingebauten Außenfühler taut die Anlage nicht selbst ab. Bei feuchter Luft vereist der Verdampfer aber schon bei 10–11 °C *(1 Anlage, siehe 4.4)*. |
 | **P63** Warmwasserfunktion | 1 | **0** | Bei Anlagen ohne Warmwasserspeicher. |
 | **P68** Durchflussfühler-Typ | 1 (Durchflussmesser) | 0 (Strömungsschalter) | **Nur mit Freigabe des Herstellers**, etwa als Übergang bei defektem Durchflussmesser. Damit entfällt die Mindestdurchfluss-Prüfung (siehe 4.3). |
 | **P71 / P72** Lüftersteuerung / Solldrehzahl | Automatik | Manuell, z. B. 400–900 U/min | Deutlich leiser – aber nur zusammen mit einer externen Regelung, die die Drehzahl nach der Verdampfertemperatur nachführt (Erfahrungsbericht 3.4). Sonst droht Vereisung. |
@@ -61,7 +62,7 @@ Die Tabelle hilft, Messwerte und Parameter einzuordnen. Bitte eigene Anlagen erg
 
 ### 3.3 Werksreset P87 – Vorsicht
 
-Der Werksreset setzt unter anderem diese Parameter zurück *(1 Anlage)*: P45 → 90 Hz, P46 → 35 Hz, **P63 → 1 (Warmwasser an, auch ohne Speicher!)**, P72 → 0, P86 → 8,0 K, P114 → 2 %. Alle Anpassungen müssen danach neu gesetzt werden. Der Reset überlebt einen Netzausfall.
+Der Werksreset setzt unter anderem diese Parameter zurück *(1 Anlage)*: P45 → 90 Hz, P46 → 35 Hz, **P63 → 1 (Warmwasser an, auch ohne Speicher!)**, P72 → 0, **P85 → 8 °C** (siehe 4.4), P86 → 8,0 K, P114 → 2 %. Alle Anpassungen müssen danach neu gesetzt werden. Der Reset überlebt einen Netzausfall.
 
 Empfehlung: P87 in ESPHome oder Home Assistant **nicht** als bedienbare Entity anlegen – ein Fehlklick verwirft die gesamte Parametrierung.
 
@@ -75,6 +76,7 @@ Bitte eigene Werte ergänzen – besonders die Parameter, die Takten, Pumpe und 
 | P46 Kompressor-Mindestfrequenz | 35 Hz | 25 Hz | | |
 | P58 Regel-ΔT Pumpe | 5 K | 5 K | | |
 | P59 Pumpen-Mindestdrehzahl | 80 % | 80 % | | |
+| P85 Abtau-Außentemperaturgrenze | 8 °C | 15 °C | | |
 | P86 Abtau-Differenz ΔT1 | 8,0 K | 5,0 K | | |
 | P91 Abtau-Differenz unter −7 °C | 8,0 K | 8,0 K | | |
 | P114 Frequenzreduktion | 2 % | 3 % | | |
@@ -104,12 +106,18 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 
 **Übergangslösung:** Mit Herstellerfreigabe auf **P68 = 0 (Strömungsschalter)** umstellen. Damit entfällt die Mindestdurchfluss-Prüfung gegen P61 – ein eigener Ersatzschutz ist dann sinnvoll (Beispiel: Erfahrungsbericht 3.8).
 
+**Nach dem Tausch** *(1 Anlage, Oktober 2026)*: Als Ersatz kam ein Vortex-Durchflussmesser (Huba Control Typ 200, DN 20, 5–85 L/min, 5 V, Frequenzsignal). E15 war damit weg, aber 4368 zeigt etwa **3,5–4× zu viel** (68–75 L/min bei 80 % Pumpe, die Wärmebilanz ergibt ~17–18 L/min). Einen Korrekturfaktor gibt es in der Avarma nicht. Damit die Mindestdurchfluss-Prüfung noch etwas bedeutet, wurde **P61 von 11 auf 35 L/min** angehoben (real etwa 9–10 L/min). Im Stillstand (Pumpe 10 %, Anzeige 0) prüft die Avarma P61 nicht.
+
+**Vor der Fehlersuche alle Absperrhähne prüfen:** Ein vergessener geschlossener Hahn liefert exakt 0 L/min und E15. Vor- und Rücklauf steigen dabei trotzdem gemeinsam, weil die Wärme im Gerät bleibt – das ist kein Beweis, dass Wasser durch den Kreis fließt.
+
 **Durchfluss ohne Messer abschätzen:** **Durchfluss [L/min] ≈ Pumpenleistung [%] × 0,22** (kalibriert an einer Anlage: ~23 L/min bei 100 %). Thermische Leistung: **Durchfluss × Spreizung × 0,0698 = kW** (4,186 kJ/kg·K ÷ 60). Das ist kein Messwert, sondern die Sollförderung der Pumpe – für COP-Auswertungen und Plausibilitätsprüfungen reicht es.
 
 ### 4.4 Abtauung und Außenfühler
 
 - **Verspätete Abtauung** *(1 Anlage, einmalig)*: Die Abtauung startete 38 Minuten zu spät, obwohl alle Startbedingungen (P27/P28/P29/P85/P86) erfüllt waren; die Lamellentemperatur fiel dabei von −3,5 auf −13 °C. Die Ursache ist ungeklärt. Bei Frost lohnt es sich, die Abtauung mitzulesen.
 - **Eingebauter Außenfühler:** Er ist strahlungsempfindlich. In der Sonne lag er bis zu **+5,5 K zu hoch**, bei vereister Lamelle bis zu 3,9 K zu tief *(1 Anlage)*. Die Anlage nutzt ihn trotzdem für die Abtau-Entscheidung und die 25-°C-Drosselung (4.2). Für eine externe Regelung ist ein separater, verschatteter Außenfühler deutlich zuverlässiger.
+- **Vereisung schon bei 10–11 °C** *(1 Anlage)*: Bei feuchter Luft und hoher Frequenz (68–79 Hz) fiel die Lamelle trotz Lüfter am Anschlag auf −3 °C, die Differenz Außenluft–Lamelle stieg bis 13 K. Die Avarma taute nicht selbst ab: **P85** stand nach einem Werksreset auf 8 °C. P85 ist wieder auf 15 °C gesetzt, die Wirkung steht noch aus. Die Differenz Außenluft–Lamelle wächst mit der Frequenz: ~5 K bei 44 Hz, ~6,5 K bei 60 Hz, ~9 K bei 75–84 Hz.
+- **P45 gilt auch beim Abtauen** *(1 Anlage)*: Die Kompressor-Maximalfrequenz deckelt auch die Abtaufrequenz P47 (65 Hz). Eine Abtauung bei P45 = 50 Hz dauerte 13,6 statt 8–11 min und endete bei ~12 °C Lamellentemperatur statt ~20 °C. Externe Regelungen sollten P45 während der Abtauung mindestens auf P47 setzen.
 
 ## 5. Fallstricke bei Modbus und ESPHome
 
@@ -120,7 +128,8 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 - **4369 „Temperaturdifferenz Hauptkreis“ ist nicht die VL/RL-Spreizung** (0–1,8 K bei tatsächlich 4,5–6 K). Die Spreizung selbst aus Vor- und Rücklauf berechnen.
 - **Funktionscode 3 liest höchstens 125 Register am Stück.** ESPHome fasst benachbarte Register zusammen; ein zu großer Block scheitert komplett und reißt alle Werte darin mit (`force_new_range` hilft).
 - **Der ESP behält bei fehlender Modbus-Antwort die letzten Werte.** Eine stromlose oder nicht antwortende Anlage sieht in Home Assistant aus wie eine ruhig laufende. Abhilfe: `on_offline`/`on_online` am `modbus_controller` auf einen eigenen Sensor „Modbus online“ legen (Beispiel im Repo).
-- **Parameterregister** nur alle paar Minuten lesen. **`skip_updates` wirkt ab ESPHome 2026.9 nicht mehr** – dann wird alles im Takt des Controllers gelesen. Stattdessen weitere `modbus_controller` mit derselben Adresse und längerem `update_interval` anlegen. Mehrstündige Modbus-Aussetzer traten bei einer Anlage erst auf, nachdem alle ~150 Parameter alle 10 s gelesen wurden *(1 Anlage, Zusammenhang noch nicht bestätigt)*. Direkt nach dem Schreiben zeigt der Lesewert noch den alten Stand – das ist kein Fehler.
+- **Parameterregister** nur alle paar Minuten lesen. **`skip_updates` wirkt ab ESPHome 2026.9 nicht mehr** – dann wird alles im Takt des Controllers gelesen. Stattdessen weitere `modbus_controller` mit derselben Adresse und längerem `update_interval` anlegen. Mit den Modbus-Aussetzern im nächsten Punkt hatte das nichts zu tun, auch wenn es zeitlich zusammenfiel. Direkt nach dem Schreiben zeigt der Lesewert noch den alten Stand – das ist kein Fehler.
+- **Mehrstündige Modbus-Aussetzer zuerst an den Klemmen suchen:** Bei einer Anlage antwortete die Avarma ab und zu stundenlang nicht, ohne dass der ESP neu startete. Firmware und Abfragelast waren es nicht, sondern eine leicht lose Klemme der Datenleitung am RS485-Board, gelockert bei Arbeiten im Verteiler. Nach dem Nachziehen war Ruhe *(1 Anlage)*. Der ESP hängt dort an einem eigenen freien Port (COMM3), das Display an einem anderen – zwei Master auf einer Leitung sind also nicht die Ursache.
 - **P45 und andere Parameterregister selten schreiben:** Ob die Avarma jeden Schreibvorgang ins EEPROM sichert, ist nicht bekannt. Vorsichtshalber selten schreiben – die Regelung aus dem Erfahrungsbericht schreibt P45 nur 2–4-mal pro Tag.
 [/details]
 

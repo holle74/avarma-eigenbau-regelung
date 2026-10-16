@@ -40,10 +40,12 @@
             value: "{{ min_temp_24h }}"
   mode: single
 
-# Nur noetig, wenn die Anlage wie hier mit P68 = 0 (Stroemungsschalter) laeuft und die
-# quantitative Durchflusspruefung gegen P61 damit entfaellt. Nach Einbau eines
-# funktionierenden Durchflussmessers wieder entfernen.
-- alias: "WP-Schutz: Durchfluss (Interim P68=0)"
+# Zweites Schutznetz, unabhaengig vom Durchflussmesser der Avarma. Entstanden als
+# Interim-Schutz, solange die Anlage mit P68 = 0 (Stroemungsschalter) lief und die
+# quantitative Durchflusspruefung gegen P61 entfiel (12.09.2026). Seit dem Einbau
+# eines neuen Durchflussmessers (10.10.2026) bleibt sie dauerhaft: sie greift auch,
+# wenn der Fuehler ausfaellt oder Unsinn misst.
+- alias: "WP-Schutzschalter: Sensor-Fehler (Spreizung/Pumpe)"
   description: >-
     Schaltet die WP ab, wenn bei laufendem Kompressor die Spreizung ueber 10 K steigt
     oder die Pumpenleistung unter 30 % faellt. Sperrt ZUERST den Autostart-Helfer,

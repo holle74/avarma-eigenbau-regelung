@@ -96,6 +96,10 @@ MODBUS_PUSH_NACH_MINUTES = 10
 # sprung in dieser Zeit ist kein echter Kompressorstart/-stopp.
 MODBUS_NACHLAUF_MINUTES = 3
 NOTIFY_SERVICE = "notify/notify"  # eigenen Dienst eintragen, z. B. notify/mobile_app_<handy>, oder per apps.yaml notify_service
+# Schalter fuer die Modbus-Push (2026-10-10: beim Fuehlertausch ist die Avarma absichtlich
+# stromlos). Nur "off" unterdrueckt; fehlt der Helfer oder ist er unavailable, wird gepusht -
+# ein kaputter Helfer darf die Warnung nicht stumm schalten.
+MODBUS_PUSH_HELPER = "input_boolean.wp_modbus_push_aktiv"
 FROST_FORECAST_NUMBER = "input_number.wp_prognose_aussentemperatur_minimum_24h"
 
 # Spender-Raeume der hydraulischen Lastverteilung (heizung_lastverteilung.py) -
@@ -174,7 +178,7 @@ VLT_ABSENK_WARTEN_MAX_MINUTES = 30
 # -------------------- Ruecklauf-Heizkurve (2026-07-24) --------------------
 # Zwei Erfahrungswerte aus vergangenen Heizperioden spannen eine lineare Kurve auf:
 # bei 0 Grad AT soll der Ruecklauf ca. 35 Grad betragen (delta T 5 Grad -> VLT ~40 Grad),
-# bei 15 Grad AT (= Start-/Heizgrenze, siehe AUTOSTART_* unten) 28 Grad.
+# bei 15 Grad AT (= Start-/Heizgrenze, siehe AUTOSTART_* unten) 28 Grad (seit 09.10.2026: 27).
 # Die Avarma hat kein eigenes Ruecklauf-Soll-Register - RLT-Ist ist hier die Fuehrungsgroesse,
 # VLT bleibt die einzige Stellgroesse und wird ueber die bestehende Schrittlogik nachgefuehrt.
 # Heizkurve auf den RUECKLAUF, stueckweise linear (Aussentemperatur, RL-Ziel).
@@ -187,7 +191,11 @@ VLT_ABSENK_WARTEN_MAX_MINUTES = 30
 # zwischen 0 und +8 nur mit 0,56 K/K. Eine einzelne Gerade (vorher -0,47 K/K,
 # nach unten extrapoliert) unterschaetzt den kalten Rand um 1-2 K - genau die
 # Luecke, die der Betreiber bisher manuell ausgleichen musste.
-HEIZKURVE_PUNKTE = [(-5.0, 38.5), (0.0, 35.0), (15.0, 28.0)]
+#
+# 2026-10-09: milder Rand 15 -> 28 auf 15 -> 27 abgesenkt, Rest unveraendert.
+# Ist-Lauf 25.09.-08.10.: RL hielt das Ziel auf +-1 K, ueber 15 Grad AT stand es flach
+# bei 28 + 1 Offset + 1 Tagesbonus = 30 (VL ~34). Rampenstart RL_ZIEL_START_C zieht mit.
+HEIZKURVE_PUNKTE = [(-5.0, 38.5), (0.0, 35.0), (15.0, 27.0)]
 
 # Rueckwaertskompatible Namen (RL-Rampenstart bzw. milder Kurvenrand)
 HEIZKURVE_AT_PUNKT2 = HEIZKURVE_PUNKTE[-1][0]
@@ -365,7 +373,7 @@ DECKEL_SCHREIB_HYSTERESE_HZ = 3.5
 # Kaltstart-Sperre (2026-08-24).
 #
 # WARUM: Nach dem Start ist der Ruecklauf IMMER unter Ziel - das Haus ist kalt und
-# das RL-Ziel faehrt absichtlich langsam hoch (1 K/15 min ab 28 Grad). Beide
+# das RL-Ziel faehrt absichtlich langsam hoch (1 K/15 min ab 27 Grad). Beide
 # Puffer-Kriterien sprechen deshalb im Kaltstart trivial an: "Ruecklauf bleibt
 # zurueck" ist per Definition erfuellt, und der Kompressor haengt beim Hochfahren
 # ohnehin am Deckel. Am 24.08. hat genau das den Puffer binnen 15 Minuten nach dem
@@ -421,6 +429,62 @@ VEREISUNG_SPREIZUNG_MAX_K = 7.0
 # der Not-Abtauung weiter unten. Dieser Wert steuert nur noch, ab wann die Regelung
 # das Festhalten einmal deutlich ins Log schreibt.
 VEREISUNG_DAUERWARNUNG_MINUTES = 45
+
+# --- Frostschutz in der Uebergangszeit (2026-10-09) ---
+#
+# WARUM: Am 09.10.2026 lief der Luefter ab 14:10 auf Anschlag (900 RPM), der Kompressor
+# mit 68-79 Hz, und trotzdem sackte die Lamelle bei 10-11 Grad Aussentemperatur von
+# +1,5 auf -2,0 Grad ab (Spreizung bis 12,8 K) - sie vereiste. Die Verriegelung oben
+# verhindert nur, dass der Puffer WEITER waechst; heruntergenommen hat die Regelung
+# die Frequenz nie.
+#
+# Vorgabe des Betreibers: in der Uebergangszeit den Kompressor auf 50 Hz herunterfahren, den
+# Luefter so lassen und spaeter wieder hochmodulieren. In der Uebergangszeit ist der
+# Waermebedarf klein genug, dass 50 Hz reichen; im Winter gilt die Regel bewusst nicht -
+# dort liegt die Lamelle dauerhaft unter 0, das ist dann Sache der Abtauung.
+#
+# Ablauf:
+#   Lamelle <= FROSTSCHUTZ_EIN_C, Luefter am Anschlag (oder Lamelle schon 1 K tiefer),
+#   Kompressor laeuft  ->  Deckel sofort auf FROSTSCHUTZ_DECKEL_HZ, Puffer auf 0,
+#                          Luefter wird nicht gedrosselt.
+#   Lamelle >= FROSTSCHUTZ_FREI_C seit FROSTSCHUTZ_FREI_MINUTES  ->  alle
+#                          FROSTSCHUTZ_STEP_MINUTES um FROSTSCHUTZ_STEP_HZ hoch, bis
+#                          der normale Deckel erreicht ist.
+#   Rueckfall auf <= FROSTSCHUTZ_EIN_C waehrend des Hochmodulierens -> sofort wieder 50 Hz.
+#
+# Frostgrenze: Die Frequenz, bei der es vereist ist, merkt sich die Regelung bis zum
+# Abschalten der WP und bleibt FROSTSCHUTZ_ABSTAND_HZ darunter - sonst baut der Puffer
+# nach dem Hochmodulieren wieder genau dorthin auf, und das Spiel beginnt von vorn.
+FROSTSCHUTZ_EIN_C = 0.0
+FROSTSCHUTZ_DECKEL_HZ = 50.0     # = KOMPRESSOR_DECKEL_MIN, tiefer laesst P45 nicht zu
+FROSTSCHUTZ_FREI_C = 2.0
+FROSTSCHUTZ_FREI_MINUTES = 10
+FROSTSCHUTZ_STEP_HZ = 5.0
+FROSTSCHUTZ_STEP_MINUTES = 15
+FROSTSCHUTZ_ABSTAND_HZ = 5.0
+
+# --- Kein Kompressor-Puffer in der Uebergangszeit (2026-10-10) ---
+#
+# Lauf 09.10.2026: Der Puffer hob den Deckel bis +25 Hz (75-85 Hz), weil der Ruecklauf nach dem
+# Kaltstart ueber Stunden unter Ziel lag. Das war Estrich-Laden, keine Unterversorgung. Ergebnis:
+# 15 % mehr Strom fuer kaum mehr Waerme (COP 3,3-3,6 statt ~4,5), danach Vereisung bei 10-11 Grad
+# Aussentemperatur. Nach der Abtauung hielten 44-55 Hz das RL-Ziel exakt, mit COP ~4,5.
+# In der Uebergangszeit gilt deshalb nur die Kennlinie (plus Frostschutz); im Winter bleibt der
+# Puffer wie bisher.
+PUFFER_IN_UEBERGANGSZEIT = False
+
+# --- Abtauung nicht durch den Deckel bremsen (2026-10-09) ---
+#
+# P45 (Kompressor-Maximalfrequenz) gilt auch waehrend der Abtauung. Die Avarma taut mit
+# P47 = 65 Hz ab; am 24.08.2026 dauerte das 7,7 / 8,3 / 11,5 min. Am 09.10. stand der
+# Deckel wegen des Frostschutzes auf 50 Hz: Die Abtauung lief mit 50 Hz, brauchte 13,6 min,
+# also laenger als die Maximaldauer P27 (12 min), und die Lamelle kam nur bis ~12 statt
+# 20 Grad - vermutlich ueber die Zeit abgebrochen. Betrifft nicht nur den Frostschutz:
+# Auch die normale Kennlinie liegt bei milder Aussentemperatur unter 65 Hz.
+# Deshalb hebt die Regelung den Deckel beim Abtaustart sofort auf P47 an und laesst ihn
+# dort, bis die Abtauung vorbei ist.
+ABTAU_LAUFFREQ_SENSOR = "sensor.controllroom_esphome_web_avarma_param_p47_roh"
+ABTAU_LAUFFREQ_FALLBACK_HZ = 65.0   # P47, am 09.10.2026 live zurueckgelesen
 
 # --- Not-Abtauung (2026-08-24) ---
 #
@@ -622,6 +686,12 @@ class HeizungVltKompressorRegelung(Hass):
         self.abtau_zuletzt = None
         self.vereisung_sperre_seit = None
         self.vereist_seit = None
+        # Frostschutz (Uebergangszeit): aktiver Deckel, Frostgrenze bis WP aus,
+        # Beginn der Erholung. Nach einem Reload leer - die Regel greift beim
+        # naechsten Zyklus neu, wenn die Lamelle noch vereist.
+        self.frost_deckel_hz = None
+        self.frost_grenze_hz = None
+        self.frost_frei_seit = None
         self.korrektur = 0.0
         self.kompressor_starts = []
         # Takterkennung: Gruende fuer einen nicht gezaehlten Stopp (TAKT_EIGENE_*,
@@ -639,6 +709,7 @@ class HeizungVltKompressorRegelung(Hass):
                           duration=MODBUS_PUSH_NACH_MINUTES * 60)
         self.listen_state(self.on_modbus_wechsel, MODBUS_ONLINE_SENSOR)
         self.listen_state(self.on_kompressor_frequenz, KOMPRESSOR_IST_SENSOR)
+        self.listen_state(self.on_betriebsstatus, BETRIEBSSTATUS_SENSOR)
         # Am Schalter statt an den Schaltstellen: so stimmt der Helfer auch,
         # wenn jemand die WP von Hand oder eine Automation sie schaltet.
         self.listen_state(self.on_wp_schalter, WP_SWITCH)
@@ -676,6 +747,7 @@ class HeizungVltKompressorRegelung(Hass):
             self.oel_sprung_um = None
             self.kompressor_an_seit = None
             self.absenkung_wartet_seit = None
+            self.frostschutz_zuruecksetzen()
             self.am_deckel_since = None
             self.vereist_seit = None
             self.log("Modbus-Verbindung zur Avarma wieder da - Regelung laeuft weiter", level="WARNING")
@@ -688,6 +760,13 @@ class HeizungVltKompressorRegelung(Hass):
                 )
 
     def on_modbus_offline(self, entity, attribute, old, new, **kwargs):
+        if self.get_state(MODBUS_PUSH_HELPER) == "off":
+            self.log(
+                f"Modbus seit {MODBUS_PUSH_NACH_MINUTES} min offline - Push unterdrueckt "
+                f"({MODBUS_PUSH_HELPER} ist aus)",
+                level="WARNING",
+            )
+            return
         self.modbus_push_gesendet = True
         self.call_service(
             self.notify_service,
@@ -1023,6 +1102,7 @@ class HeizungVltKompressorRegelung(Hass):
             self.kompressor_starts = []
             self.stopp_grund = None
             self.absenkung_wartet_seit = None
+            self.frostschutz_zuruecksetzen()
             self.eg_warm_seit = None
             return
         if self.modbus_offline():
@@ -1047,6 +1127,7 @@ class HeizungVltKompressorRegelung(Hass):
             self.kompressor_starts = []
             self.stopp_grund = None
             self.absenkung_wartet_seit = None
+            self.frostschutz_zuruecksetzen()
             return
 
         wp_on = self.get_state(WP_SWITCH) == "on"
@@ -1057,6 +1138,7 @@ class HeizungVltKompressorRegelung(Hass):
             self.kompressor_starts = []
             self.stopp_grund = None
             self.absenkung_wartet_seit = None
+            self.frostschutz_zuruecksetzen()
             return
 
         if not self.wp_war_an:
@@ -1658,6 +1740,20 @@ class HeizungVltKompressorRegelung(Hass):
             self.vereisung_sperre_seit = None
             unterversorgt = False
 
+        # Uebergangszeit: Puffer aus (siehe PUFFER_IN_UEBERGANGSZEIT).
+        if not PUFFER_IN_UEBERGANGSZEIT and self.uebergangszeit():
+            if self.boost_hz is None or self.boost_hz > 0:
+                self.log(
+                    f"Kompressor-Puffer aus (Uebergangszeit) - Deckel folgt nur der Kennlinie "
+                    f"{basis:.0f} Hz bei AT {at:.1f}°C",
+                    level="INFO",
+                )
+            self.boost_hz = 0.0
+            self.boost_since = None
+            self.am_deckel_since = None
+            self.vereisung_sperre_seit = None
+            unterversorgt = False
+
         # Beim ersten Lauf den Puffer aus dem Geraetezustand rekonstruieren, statt bei
         # 0 zu beginnen - sonst muesste er sich nach jedem Reload mitten im Winter neu
         # aufbauen (BOOST_SUSTAIN_MINUTES plus Schrittintervalle).
@@ -1755,7 +1851,15 @@ class HeizungVltKompressorRegelung(Hass):
                         level="INFO",
                     )
 
-            if (lange_genug and am_deckel_lang) and spielraum_frei and not vereist:
+            # Frostgrenze: nicht wieder dorthin aufbauen, wo es heute schon vereist ist.
+            if self.frost_grenze_hz is not None:
+                spielraum_frei = spielraum_frei and (
+                    DECKEL_RASTER_HZ * round(basis / DECKEL_RASTER_HZ) + self.boost_hz + BOOST_STEP_HZ
+                    <= self.frost_grenze_hz
+                )
+
+            if ((lange_genug and am_deckel_lang) and spielraum_frei and not vereist
+                    and self.frost_deckel_hz is None):
                 letzter = self.last_step.get("boost")
                 faellig = (
                     letzter is None
@@ -1809,6 +1913,25 @@ class HeizungVltKompressorRegelung(Hass):
         )
         roh_deckel = min(obergrenze, basis + self.boost_hz)
 
+        frost = self.frostschutz(ziel_deckel, komp_ist)
+        if frost is not None:
+            if self.frost_deckel_hz is not None and self.boost_hz > 0:
+                # Puffer verwerfen: nach dem Frostschutz soll er nicht von alter
+                # Hoehe aus weiterlaufen, sondern sich ggf. neu und unter der
+                # Frostgrenze aufbauen.
+                self.boost_hz = 0.0
+                self.boost_since = None
+                self.am_deckel_since = None
+            ziel_deckel = round(frost)
+            roh_deckel = frost
+
+        # Waehrend der Abtauung nie unter P47 (siehe ABTAU_LAUFFREQ_*).
+        if self.abtauen_aktiv():
+            abtau_hz = self.abtau_lauffrequenz()
+            if ziel_deckel < abtau_hz:
+                ziel_deckel = round(abtau_hz)
+                roh_deckel = abtau_hz
+
         if (
             abs(ziel_deckel - komp_max_ist) >= 1.0
             and abs(roh_deckel - komp_max_ist) >= DECKEL_SCHREIB_HYSTERESE_HZ
@@ -1822,6 +1945,141 @@ class HeizungVltKompressorRegelung(Hass):
                 f"Obergrenze {obergrenze:.0f})",
                 level="INFO",
             )
+
+    def abtau_lauffrequenz(self):
+        f = self.safe_float(ABTAU_LAUFFREQ_SENSOR)
+        return f if f is not None and 30 <= f <= 90 else ABTAU_LAUFFREQ_FALLBACK_HZ
+
+    def on_betriebsstatus(self, entity, attribute, old, new, **kwargs):
+        """Abtaustart sofort erkennen und den Deckel auf P47 anheben - nicht erst im
+        naechsten Regelzyklus, der bis zu 5 min spaeter kommt (Abtauung: 8-12 min)."""
+        try:
+            neu_ab = int(float(new)) & BETRIEBSSTATUS_BIT_ABTAUEN
+            alt_ab = int(float(old)) & BETRIEBSSTATUS_BIT_ABTAUEN if old not in (None, "unavailable", "unknown") else 0
+        except (ValueError, TypeError):
+            return
+        if not neu_ab or alt_ab or not self.ki_aktiv() or self.modbus_offline():
+            return
+        self.abtau_zuletzt = self.datetime()
+        deckel = self.safe_float(KOMPRESSOR_MAX_NUMBER)
+        ziel = self.abtau_lauffrequenz()
+        if deckel is not None and deckel < ziel:
+            self.call_service("number/set_value", entity_id=KOMPRESSOR_MAX_NUMBER, value=round(ziel))
+            self.log(
+                f"Abtauung gestartet: Kompressor-Deckel {deckel:.0f}->{ziel:.0f} Hz (P47), "
+                f"damit sie nicht gebremst wird - danach zurueck",
+                level="INFO",
+            )
+
+    def frostschutz_zuruecksetzen(self):
+        self.frost_deckel_hz = None
+        self.frost_grenze_hz = None
+        self.frost_frei_seit = None
+
+    def frostschutz(self, normal_deckel, komp_ist):
+        """Frostschutz in der Uebergangszeit (siehe FROSTSCHUTZ_*).
+
+        Gibt den Deckel zurueck, der statt normal_deckel gelten soll, oder None,
+        wenn der normale Deckel gilt."""
+        if not self.uebergangszeit():
+            if self.frost_deckel_hz is not None:
+                self.log("Frostschutz beendet: Uebergangszeit ist aus", level="INFO")
+            self.frostschutz_zuruecksetzen()
+            return None
+
+        now = self.datetime()
+        verdampfer = self.safe_float(EVAPORATOR_SENSOR)
+        # Ohne Messwert oder waehrend einer Abtauung (Lamelle bis ueber 20 Grad) ist die
+        # Temperatur kein Signal - dann bleibt alles, wie es ist.
+        if verdampfer is None or self.abtauen_aktiv():
+            return self._frostgrenze_anwenden(normal_deckel)
+
+        fan_raw = self.safe_float(FAN_SPEED_NUMBER)
+        fan = fan_raw * FAN_REGISTER_SCALE if fan_raw is not None else None
+        luft_ausgereizt = fan is not None and fan >= FAN_MAX_RPM - 10
+        laeuft = komp_ist is not None and komp_ist >= KOMPRESSOR_LAEUFT_HZ
+
+        if (laeuft and verdampfer <= FROSTSCHUTZ_EIN_C
+                and (luft_ausgereizt or verdampfer <= FROSTSCHUTZ_EIN_C - 1.0)):
+            self.frost_frei_seit = None
+            if self.frost_deckel_hz is None or self.frost_deckel_hz > FROSTSCHUTZ_DECKEL_HZ:
+                if komp_ist > FROSTSCHUTZ_DECKEL_HZ:
+                    grenze = max(
+                        FROSTSCHUTZ_DECKEL_HZ,
+                        DECKEL_RASTER_HZ * math.floor(komp_ist / DECKEL_RASTER_HZ)
+                        - FROSTSCHUTZ_ABSTAND_HZ,
+                    )
+                    self.frost_grenze_hz = (
+                        grenze if self.frost_grenze_hz is None
+                        else min(self.frost_grenze_hz, grenze)
+                    )
+                vorher = "neu" if self.frost_deckel_hz is None else f"Rueckfall bei {self.frost_deckel_hz:.0f} Hz"
+                self.frost_deckel_hz = FROSTSCHUTZ_DECKEL_HZ
+                self.last_step["frost_step"] = now
+                grenze_txt = (
+                    f", Frostgrenze bis WP aus {self.frost_grenze_hz:.0f} Hz"
+                    if self.frost_grenze_hz is not None else ""
+                )
+                self.log(
+                    f"Frostschutz ({vorher}): Lamelle {verdampfer:.1f}°C bei {komp_ist:.0f} Hz "
+                    f"und Luefter {fan if fan is not None else '?'} RPM - Kompressor-Deckel auf "
+                    f"{FROSTSCHUTZ_DECKEL_HZ:.0f} Hz, Luefter bleibt{grenze_txt}",
+                    level="WARNING",
+                )
+            return self.frost_deckel_hz
+
+        if self.frost_deckel_hz is None:
+            return self._frostgrenze_anwenden(normal_deckel)
+
+        # Aktiv: erst hochmodulieren, wenn sich die Lamelle erholt hat. Nach einer
+        # Abtauung ist sie noch minutenlang warm - das ist keine Erholung.
+        nach_abtauung = (
+            self.abtau_zuletzt is not None
+            and (now - self.abtau_zuletzt).total_seconds() / 60
+            < FAN_DROSSEL_SPERRE_NACH_ABTAUUNG_MINUTES
+        )
+        if verdampfer < FROSTSCHUTZ_FREI_C or nach_abtauung:
+            self.frost_frei_seit = None
+            return self.frost_deckel_hz
+        if self.frost_frei_seit is None:
+            self.frost_frei_seit = now
+        if (now - self.frost_frei_seit).total_seconds() / 60 < FROSTSCHUTZ_FREI_MINUTES:
+            return self.frost_deckel_hz
+        if not self.cooldown_ok("frost_step", FROSTSCHUTZ_STEP_MINUTES):
+            return self.frost_deckel_hz
+
+        ziel = normal_deckel
+        if self.frost_grenze_hz is not None:
+            ziel = min(ziel, self.frost_grenze_hz)
+        neu = self.frost_deckel_hz + FROSTSCHUTZ_STEP_HZ
+        self.last_step["frost_step"] = now
+        if neu >= ziel:
+            self.log(
+                f"Frostschutz beendet: Lamelle {verdampfer:.1f}°C, Deckel zurueck auf "
+                f"{ziel:.0f} Hz" + (" (Frostgrenze)" if ziel < normal_deckel else ""),
+                level="INFO",
+            )
+            self.frost_deckel_hz = None
+            self.frost_frei_seit = None
+            # Den Zielwert selbst zurueckgeben, nicht None: sonst koennte die
+            # Schreib-Hysterese den Deckel auf dem letzten Frostschutz-Schritt stehen
+            # lassen (z.B. 55 statt 57 Hz).
+            return ziel
+        self.log(
+            f"Frostschutz moduliert hoch {self.frost_deckel_hz:.0f}->{neu:.0f} Hz "
+            f"(Lamelle {verdampfer:.1f}°C, Ziel {ziel:.0f} Hz)",
+            level="INFO",
+        )
+        self.frost_deckel_hz = neu
+        return neu
+
+    def _frostgrenze_anwenden(self, normal_deckel):
+        """Nach dem Frostschutz: normaler Deckel, aber nicht ueber der Frostgrenze."""
+        if self.frost_deckel_hz is not None:
+            return self.frost_deckel_hz
+        if self.frost_grenze_hz is not None and normal_deckel > self.frost_grenze_hz:
+            return self.frost_grenze_hz
+        return None
 
     def control_fan(self):
         mode = self.get_state(FAN_MODE_SELECT)
@@ -1889,6 +2147,10 @@ class HeizungVltKompressorRegelung(Hass):
             )
         elif (verdampfer > EVAPORATOR_MIN_C + EVAPORATOR_HYSTERESE_C
               and fan_speed > FAN_MIN_RPM):
+            # Frostschutz aktiv: der Luefter bleibt, bis der Deckel wieder normal ist
+            # (2026-10-09: "den Luefter laesst").
+            if self.frost_deckel_hz is not None:
+                return
             # Nach einer Abtauung bleibt der Verdampfer noch minutenlang warm -
             # in dieser Zeit ist "viel Reserve" eine Taeuschung.
             if self.abtau_zuletzt is not None:

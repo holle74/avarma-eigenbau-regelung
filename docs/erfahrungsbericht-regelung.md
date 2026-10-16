@@ -59,15 +59,15 @@ Der **Rücklauf** zeigt, was das Haus tatsächlich an Wärme abnimmt. Die Avarma
 |---|---|
 | −5 °C | 38,5 °C |
 | 0 °C | 35,0 °C |
-| +15 °C und wärmer | 28,0 °C |
+| +15 °C und wärmer | 27,0 °C |
 
-Unter −5 °C wird weiter extrapoliert, gedeckelt bei 40 °C. Die Stützpunkte stammen aus meinen Vorlauf-Erfahrungswerten aus zwei Wintern (−5 °C → 45 °C VL, 0 °C → 39,5 °C, +8 °C → 35 °C), umgerechnet über die gemessene Spreizung. Eine einzelne Gerade hat den kalten Rand um 1–2 K unterschätzt – genau die Lücke, die ich früher von Hand ausgeglichen habe.
+Unter −5 °C wird weiter extrapoliert, gedeckelt bei 40 °C. Die Stützpunkte stammen aus meinen Vorlauf-Erfahrungswerten aus zwei Wintern (−5 °C → 45 °C VL, 0 °C → 39,5 °C, +8 °C → 35 °C), umgerechnet über die gemessene Spreizung. Eine einzelne Gerade hat den kalten Rand um 1–2 K unterschätzt – genau die Lücke, die ich früher von Hand ausgeglichen habe. Den milden Rand habe ich am 09.10. von 28 auf 27 °C gesenkt – mit Offset und Tagesbonus stand das Ziel dort bei 30 °C, mehr als nötig.
 
 Auf die Kurve kommen:
 - **Tagesbonus +1 K** (07–22 Uhr): Estrich tagsüber leicht vorladen.
 - **Vorladen vor Frost:** Liegt das Minimum der 24-h-Prognose unter 8 °C, steigt das Ziel tagsüber um `(8 − Prognose) × 0,4 K`, maximal +4 K. Bei −5 °C angesagt also +4 K schon am Tag davor.
 - **Lernender Offset** (±3 K, siehe 4.1).
-- **Kaltstart-Rampe:** Nach dem Einschalten startet das Ziel bei 28 °C und steigt um 1 K je 15 min.
+- **Kaltstart-Rampe:** Nach dem Einschalten startet das Ziel bei 27 °C und steigt um 1 K je 15 min.
 
 ### 3.2 Vorlauf-Sollwert per Vorsteuerung
 
@@ -91,8 +91,11 @@ Die Maximalfrequenz P45 folgt einer Kennlinie im 5-Hz-Raster – Grund ist der C
 | +15 °C und wärmer | 50 Hz |
 
 - **Untergrenze 50 Hz:** P41 (Ölrückführungsfrequenz) steht auf 50 Hz. Der Deckel geht nie darunter, damit die Ölrückführung nicht behindert wird.
-- **Winter-Eskalation:** Hängt der Kompressor 60 min am Deckel **und** liegt der Rücklauf 60 min unter Ziel, geht der Deckel um +5 Hz je 30 min hoch – bis 90 Hz, **95 Hz nur bei −5 °C und kälter**. Die letzten 5 Hz sind Frostreserve, kein Alltagswerkzeug.
+- **Winter-Eskalation** (nur im Winter): Hängt der Kompressor 60 min am Deckel **und** liegt der Rücklauf 60 min unter Ziel, geht der Deckel um +5 Hz je 30 min hoch – bis 90 Hz, **95 Hz nur bei −5 °C und kälter**. Die letzten 5 Hz sind Frostreserve, kein Alltagswerkzeug.
 - **Vereisungssperre:** Liegt der Verdampfer unter 1 °C und die Differenz Außenluft–Verdampfer über 7 K, wird nicht eskaliert. Mehr Frequenz kauft dann Eis statt Wärme.
+- **Kein Puffer in der Übergangszeit** (seit 10.10.): Dort ist die Eskalation ganz aus, der Deckel folgt nur der Kennlinie. Am 09.10. hatte sie nach dem Kaltstart bis +25 Hz aufgeschlagen und dabei vor allem Strom und Eis gekauft: COP 3,3–3,6 bei 81–84 Hz statt 4,3–4,9 bei 60 Hz, und der Rücklauf kam trotzdem nicht schneller ans Ziel. Der Rückstand nach dem Kaltstart ist Estrich-Laden, kein Wärmemangel.
+- **Frostschutz in der Übergangszeit** (seit 09.10.): Bei feuchter Luft vereiste die Lamelle schon bei 10–11 °C Außentemperatur (−3 °C bei 68–79 Hz, Lüfter am Anschlag, siehe Avarma-Wiki 4.4). Fällt sie auf ≤ 0 °C bei Lüfter ≥ 890 U/min (oder auf ≤ −1 °C), geht der Deckel sofort auf 50 Hz. Liegt sie 10 min lang bei ≥ 2 °C, wieder +5 Hz je 15 min bis zur Kennlinie, nicht in den 15 min nach einer Abtauung. Die Frequenz, bei der es vereist ist, minus 5 Hz bleibt bis zum Ausschalten die Obergrenze – auch für den Puffer.
+- **Abtauung nicht bremsen** (seit 09.10.): P45 deckelt auch die Abtaufrequenz (Avarma-Wiki 4.4). Beginnt eine Abtauung, setzt die Regelung P45 sofort auf P47 (hier 65 Hz) und schreibt bis zum Ende nie darunter.
 
 ### 3.4 Lüfter: so leise wie möglich
 
@@ -139,9 +142,9 @@ Wenn der Kompressor am Deckel hängt, reicht die Wärme nicht für alle Kreise. 
 ### 3.8 Schutzschicht, unabhängig von der Regelung
 
 - **Heartbeat-Watchdog im ESP** (siehe 2.)
-- **Modbus-Wächter:** Antwortet die Avarma nicht mehr, meldet der ESP das über einen eigenen Sensor. Die Regelung pausiert dann (nur der Heartbeat läuft weiter, damit der Watchdog nicht anspringt) und schickt nach 10 min eine Push-Nachricht.
+- **Modbus-Wächter:** Antwortet die Avarma nicht mehr, meldet der ESP das über einen eigenen Sensor. Die Regelung pausiert dann (nur der Heartbeat läuft weiter, damit der Watchdog nicht anspringt) und schickt nach 10 min eine Push-Nachricht. Die lässt sich mit `input_boolean.wp_modbus_push_aktiv` abschalten, etwa wenn die Anlage für Arbeiten absichtlich stromlos ist.
 - **Zwei Handschalter:** Autostart erlaubt/gesperrt, automatische Abschaltungen erlaubt/gesperrt
-- **Interim-Durchflussschutz** (siehe Avarma-Wiki 4.3): Aus bei laufendem Kompressor und Spreizung > 10 K oder Pumpe < 30 %
+- **Schutzschalter Sensor-Fehler** (`homeassistant/automations.yaml`): Aus bei laufendem Kompressor und Spreizung > 10 K oder Pumpe < 30 %. Entstanden als Interim-Schutz für die Zeit mit P68 = 0 (Avarma-Wiki 4.3), seit dem Fühlertausch dauerhaft – er greift auch, wenn der Durchflussmesser ausfällt oder Unsinn misst.
 
 ### 3.9 Betriebsmodus: ein Schalter für alles
 
@@ -189,7 +192,10 @@ Seit Oktober wähle ich den Modus mit einem einzigen Schalter (`input_select.wp_
 - **27.09.:** Nachtsperre endet um 08:30 statt 10:00.
 - **02.10.:** Ein Betriebsmodus-Schalter ersetzt Kalender und Einzelschalter (3.9).
 - **03.10.:** Zweites Gebäudemodell mit zugeführter Wärme (4.1) – damit lernt die Thermometrie auch im Winter weiter.
-- **08.10.:** Zweite Auswertung (3.6). Die Absenkbremse war zu großzügig (Avarma-Wiki 4.2) – jetzt nur noch absenken, wenn der Vorlauf nicht über dem neuen Soll liegt. Am selben Tag: Die Avarma hatte am 05. und 08.10. stundenlang nicht auf Modbus geantwortet – die Regelung arbeitete fünf Stunden gegen eingefrorene Werte. Verdacht: Seit ESPHome 2026.9 wirkt `skip_updates` nicht mehr, alle ~150 Parameter liefen alle 10 s. Behoben mit langsameren Zusatz-Controllern, dazu der Modbus-Wächter (3.8).
+- **08.10.:** Zweite Auswertung (3.6). Die Absenkbremse war zu großzügig (Avarma-Wiki 4.2) – jetzt nur noch absenken, wenn der Vorlauf nicht über dem neuen Soll liegt. Am selben Tag: Die Avarma hatte am 05. und 08.10. stundenlang nicht auf Modbus geantwortet – die Regelung arbeitete fünf Stunden gegen eingefrorene Werte. Verdacht: Seit ESPHome 2026.9 wirkt `skip_updates` nicht mehr, alle ~150 Parameter liefen alle 10 s. Langsamere Zusatz-Controller halfen aber nicht – noch am selben Abend fiel Modbus wieder aus. Dazu kam der Modbus-Wächter (3.8).
+- **09.10.:** Milderer Kurvenrand (3.1). Vereisung bei 10–11 °C Außentemperatur, die Avarma taute nicht selbst ab → Frostschutz in der Übergangszeit (3.3). Dabei gelernt: P45 bremst auch die Abtauung.
+- **10.10.:** Neuer Durchflussmesser eingebaut (Avarma-Wiki 4.3), Puffer in der Übergangszeit abgeschaltet (3.3). Und die Modbus-Aussetzer erklärt: eine lose Klemme der Datenleitung am RS485-Board im Verteiler, vermutlich beim Umklemmen dort am 04.10. gelockert. Seit dem Nachziehen keine Aussetzer mehr.
+- **11.10.:** P85 stand seit dem Werksreset auf 8 statt 15 °C – darüber taut die Avarma nicht selbst ab. Das passt zur Vereisung vom 09.10. (Avarma-Wiki 3.3 und 4.4).
 
 **Meine wichtigsten Lehren:**
 1. **Erst messen, dann regeln.** Fast jede gute Entscheidung kam aus einer Auswertung, fast jeder Fehler aus einer Annahme.
@@ -198,6 +204,7 @@ Seit Oktober wähle ich den Modus mit einem einzigen Schalter (`input_select.wp_
 4. **Schutzmechanismen gehören in den ESP**, nicht nur in Home Assistant.
 5. **Regeln immer als Paar denken:** Wer ein Einschaltkriterium ändert, muss das Ausschaltkriterium mit anschauen – sonst arbeiten sie gegeneinander.
 6. **Bevor man ein Symptom bekämpft, prüfen, ob man es selbst verursacht.** Das „Takten“ der Übergangszeit war zum großen Teil meine eigene Regelung.
+7. **Bei Kommunikationsfehlern zuerst die Klemmen, dann die Firmware.** Die Modbus-Aussetzer hatte ich erst der ESPHome-Version zugeschrieben – es war eine lose Schraube.
 
 ## 6. Fallstricke in Home Assistant und AppDaemon
 
