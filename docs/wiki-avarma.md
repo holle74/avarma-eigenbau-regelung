@@ -4,7 +4,7 @@ Dieser Artikel sammelt Wissen zur Wärmepumpe **Hofman Avarma**: Modbus-Anbindun
 
 **Belegstand:** Viele Angaben stammen bisher von einer einzigen Anlage (Avarma V2, 12 kW, 230 V). Sie sind mit *(1 Anlage)* markiert. Wer sie an seiner Anlage bestätigen oder widerlegen kann, bitte die Markierung anpassen oder eine Anmerkung ergänzen – Anlagen und Firmwarestände können sich unterscheiden.
 
-Eine vollständige externe Regelung über ESPHome, Home Assistant und AppDaemon beschreibt ein **Erfahrungsbericht**: **[Link zum Erfahrungsbericht]**. Verweise wie „Erfahrungsbericht 3.2“ meinen die Abschnitte dort.
+Eine vollständige externe Regelung über ESPHome, Home Assistant und AppDaemon beschreibt der Beitrag **„Fast intelligente Heizungssteuerung mit einer Avarma 12 kW“**: **[Link zum Beitrag]**. Verweise wie „Steuerung, Baustein 2“ meinen die Abschnitte dort.
 
 ---
 
@@ -51,7 +51,7 @@ Die Tabelle hilft, Messwerte und Parameter einzuordnen. Bitte eigene Anlagen erg
 | **P85** Abtau-Außentemperaturgrenze | 8 °C | **15 °C** | Oberhalb dieser Temperatur am eingebauten Außenfühler taut die Anlage nicht selbst ab. Bei feuchter Luft vereist der Verdampfer aber schon bei 10–11 °C *(1 Anlage, siehe 4.4)*. |
 | **P63** Warmwasserfunktion | 1 | **0** | Bei Anlagen ohne Warmwasserspeicher. |
 | **P68** Durchflussfühler-Typ | 1 (Durchflussmesser) | 0 (Strömungsschalter) | **Nur mit Freigabe des Herstellers**, etwa als Übergang bei defektem Durchflussmesser. Damit entfällt die Mindestdurchfluss-Prüfung (siehe 4.3). |
-| **P71 / P72** Lüftersteuerung / Solldrehzahl | Automatik | Manuell, z. B. 400–900 U/min | Deutlich leiser – aber nur zusammen mit einer externen Regelung, die die Drehzahl nach der Verdampfertemperatur nachführt (Erfahrungsbericht 3.4). Sonst droht Vereisung. |
+| **P71 / P72** Lüftersteuerung / Solldrehzahl | Automatik | Manuell, z. B. 400–900 U/min | Deutlich leiser – aber nur zusammen mit einer externen Regelung, die die Drehzahl nach der Verdampfertemperatur nachführt (Steuerung, Baustein 4). Sonst droht Vereisung. |
 
 ### 3.2 Wichtige Werkseinstellungen
 
@@ -95,7 +95,7 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 
 ### 4.2 Kompressorstopps und Drosselung
 
-- **Vorlauf über dem Sollwert:** Wird P2 so abgesenkt, dass der Vorlauf darüber liegt, stoppt der Kompressor meist binnen einer Minute. Ausgewertet an 70 Absenkungen *(1 Anlage)*: Vorlauf auf oder unter dem neuen Sollwert – nie ein Stopp; 0,5 K darüber – 3 von 16; 0,8 K und mehr – 6 von 11. Für externe Regelungen, die P2 schreiben, ist das entscheidend (Erfahrungsbericht 3.2).
+- **Vorlauf über dem Sollwert:** Wird P2 so abgesenkt, dass der Vorlauf darüber liegt, stoppt der Kompressor meist binnen einer Minute. Ausgewertet an 70 Absenkungen *(1 Anlage)*: Vorlauf auf oder unter dem neuen Sollwert – nie ein Stopp; 0,5 K darüber – 3 von 16; 0,8 K und mehr – 6 von 11. Für externe Regelungen, die P2 schreiben, ist das entscheidend (Steuerung, Baustein 2).
 - **Ölrückführung:** Nach längerem Lauf mit niedriger Frequenz springt der Kompressor für unter eine Minute auf die Frequenz aus P41 (50 Hz). Der Vorlauf schießt dabei über den Sollwert, und die Anlage kann stoppen.
 - **Drosselung ab 25 °C am eingebauten Außenfühler** (nicht dokumentiert, *1 Anlage*): Erreicht der Fühler 25,0 °C, nimmt die Avarma binnen 3–4 s rund 12 Hz Sollfrequenz weg (50 → 38, 60 → 48 Hz), bei anhaltender Überschreitung weiter in 2-Hz-Schritten. Fällt er darunter, steigt die Frequenz um 2 Hz je ~30 s. Register 4387 bleibt dabei 0. Steht der Fühler in der Sonne, tritt das schon bei tatsächlich 19,5 °C auf (siehe 4.4).
 - **Übergangszeit:** Selbst die Mindestfrequenz liefert oft mehr Wärme, als das Gebäude abnimmt. Dann taktet jede Wärmepumpe – das ist Physik, kein Defekt.
@@ -104,7 +104,7 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 
 **Symptome eines defekten Durchflussmessers** *(1 Anlage)*: Register 4368 liefert nur 0 oder unplausible 119–149 L/min. Später kommt **E15 (Wasserdurchfluss)**, reproduzierbar kurz nach jedem Kompressorstart, obwohl die Hydraulik in Ordnung ist. Im bekannten Fall hat der Hersteller den Defekt anerkannt und Ersatz auf Kulanz zugesagt.
 
-**Übergangslösung:** Mit Herstellerfreigabe auf **P68 = 0 (Strömungsschalter)** umstellen. Damit entfällt die Mindestdurchfluss-Prüfung gegen P61 – ein eigener Ersatzschutz ist dann sinnvoll (Beispiel: Erfahrungsbericht 3.8).
+**Übergangslösung:** Mit Herstellerfreigabe auf **P68 = 0 (Strömungsschalter)** umstellen. Damit entfällt die Mindestdurchfluss-Prüfung gegen P61 – ein eigener Ersatzschutz ist dann sinnvoll (Beispiel: Automation „WP-Schutzschalter“ im Repo, Abschnitt 6).
 
 **Nach dem Tausch** *(1 Anlage, Oktober 2026)*: Als Ersatz kam ein Vortex-Durchflussmesser (Huba Control Typ 200, DN 20, 5–85 L/min, 5 V, Frequenzsignal). E15 war damit weg, aber 4368 zeigt etwa **3,5–4× zu viel** (68–75 L/min bei 80 % Pumpe, die Wärmebilanz ergibt ~17–18 L/min). Einen Korrekturfaktor gibt es in der Avarma nicht. Damit die Mindestdurchfluss-Prüfung noch etwas bedeutet, wurde **P61 von 11 auf 35 L/min** angehoben (real etwa 9–10 L/min). Im Stillstand (Pumpe 10 %, Anzeige 0) prüft die Avarma P61 nicht.
 
@@ -130,7 +130,7 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 - **Der ESP behält bei fehlender Modbus-Antwort die letzten Werte.** Eine stromlose oder nicht antwortende Anlage sieht in Home Assistant aus wie eine ruhig laufende. Abhilfe: `on_offline`/`on_online` am `modbus_controller` auf einen eigenen Sensor „Modbus online“ legen (Beispiel im Repo).
 - **Parameterregister** nur alle paar Minuten lesen. **`skip_updates` wirkt ab ESPHome 2026.9 nicht mehr** – dann wird alles im Takt des Controllers gelesen. Stattdessen weitere `modbus_controller` mit derselben Adresse und längerem `update_interval` anlegen. Mit den Modbus-Aussetzern im nächsten Punkt hatte das nichts zu tun, auch wenn es zeitlich zusammenfiel. Direkt nach dem Schreiben zeigt der Lesewert noch den alten Stand – das ist kein Fehler.
 - **Mehrstündige Modbus-Aussetzer zuerst an den Klemmen suchen:** Bei einer Anlage antwortete die Avarma ab und zu stundenlang nicht, ohne dass der ESP neu startete. Firmware und Abfragelast waren es nicht, sondern eine leicht lose Klemme der Datenleitung am RS485-Board, gelockert bei Arbeiten im Verteiler. Nach dem Nachziehen war Ruhe *(1 Anlage)*. Der ESP hängt dort an einem eigenen freien Port (COMM3), das Display an einem anderen – zwei Master auf einer Leitung sind also nicht die Ursache.
-- **P45 und andere Parameterregister selten schreiben:** Ob die Avarma jeden Schreibvorgang ins EEPROM sichert, ist nicht bekannt. Vorsichtshalber selten schreiben – die Regelung aus dem Erfahrungsbericht schreibt P45 nur 2–4-mal pro Tag.
+- **P45 und andere Parameterregister selten schreiben:** Ob die Avarma jeden Schreibvorgang ins EEPROM sichert, ist nicht bekannt. Vorsichtshalber selten schreiben – die Regelung aus dem Steuerungsbeitrag schreibt P45 nur 2–4-mal pro Tag.
 [/details]
 
 [details="Skalierungen und ESPHome"]
@@ -143,7 +143,7 @@ Im Teillastbereich arbeitet die Anlage rund 50 % effizienter als nahe der Maxima
 
 ## 6. Konfiguration und Mitarbeit
 
-**Beispielkonfiguration:** https://github.com/holle74/avarma-eigenbau-regelung – vollständige ESPHome-Konfiguration für alle Register, dazu die Regelung aus dem Erfahrungsbericht.
+**Beispielkonfiguration:** https://github.com/holle74/avarma-eigenbau-regelung – vollständige ESPHome-Konfiguration für alle Register, dazu die Regelung aus dem Steuerungsbeitrag.
 
 > ⚠️ **Auf eigene Gefahr.** Vor dem Schreiben von Registern erst nur mitlesen, jeden Wert am Panel gegenprüfen und schreibende Entities einzeln freischalten. Garantiefragen klärt jeder selbst.
 

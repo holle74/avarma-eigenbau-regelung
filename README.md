@@ -5,7 +5,7 @@ Eine selbst gebaute, datengetriebene Regelung für die **Hofman Avarma 12 kW Mon
 (rund 1.000 m Heizrohr, 12 Heizkreise, 15 cm Verlegeabstand), in dem die Anlage im Winter an ihrer
 Leistungsgrenze läuft.
 
-Hintergrund, Regellogik und Projektgeschichte stehen im Erfahrungsbericht (`docs/erfahrungsbericht-regelung.md`), alles zur Anlage selbst im Avarma-Wiki (`docs/wiki-avarma.md`, im Forum: https://akkudoktor.net/t/wiki-avarma-290-waermepumpe-monoblock/41521).
+Haus, Regellogik und Messergebnisse stehen im Forumsbeitrag „Fast intelligente Heizungssteuerung mit einer Avarma 12 kW“ (`docs/steuerung-avarma.md`), alles zur Anlage selbst im Avarma-Wiki (`docs/wiki-avarma.md`, im Forum: https://akkudoktor.net/t/wiki-avarma-290-waermepumpe-monoblock/41521).
 Dieses Repo enthält den Code dazu.
 
 > ⚠️ **Auf eigene Gefahr.** Die Regelung **schreibt Register der Wärmepumpe** (Vorlauf-Sollwert,
@@ -27,7 +27,7 @@ Dieses Repo enthält den Code dazu.
 | `homeassistant/automations.yaml` | Frost-Vorschau aus der Wetterprognose, Interim-Durchflussschutz |
 | `homeassistant/www/heizung/wp-modus-card.js` | Dashboard-Karte für den Betriebsmodus (nach `/config/www/heizung/` kopieren, als Ressource `/local/heizung/wp-modus-card.js` vom Typ *module* anlegen, Kartentyp `custom:wp-modus-card`) |
 | `docs/wiki-avarma.md` | Avarma-Wiki: Anlage, Modbus-Register, Parameter, Messwerte, Fallstricke |
-| `docs/erfahrungsbericht-regelung.md` | Erfahrungsbericht zur Regelung: Warum, Aufbau, Regellogik, Geschichte, Fallstricke |
+| `docs/steuerung-avarma.md` | Forumsbeitrag zur Regelung: Haus, Avarma, Regellogik Baustein für Baustein, Messergebnisse |
 
 ## Voraussetzungen
 
@@ -88,7 +88,7 @@ Der Sensor **„Modbus online“** im ESP meldet, wenn die Avarma nicht mehr auf
 - **Der Durchflussmesser (4368)** lieferte hier nie plausible Werte – auch der Ersatzfühler zeigt etwa 3,5–4× zu viel.
 - **AppDaemon `set_state`** lässt Attribute mit `0`, `False` oder `None` stillschweigend weg – Werte, die legitim 0 werden können, als String setzen.
 
-Ausführlich: `docs/wiki-avarma.md` (Anlage) und `docs/erfahrungsbericht-regelung.md` (Regelung).
+Ausführlich: `docs/wiki-avarma.md` (Anlage) und `docs/steuerung-avarma.md` (Regelung).
 
 ## Entstehung
 
