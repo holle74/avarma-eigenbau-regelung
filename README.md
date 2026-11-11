@@ -70,13 +70,61 @@ Anlegen über *Einstellungen → Geräte & Dienste → Helfer*.
 1. **Nur lesen.** ESPHome flashen, aber zunächst ohne schreibbare `number`/`select`/`switch`-Entities. Alle Werte gegen das Bedienpanel der Anlage prüfen – Adressen *und* Skalierungen.
 2. **Beobachter laufen lassen.** `heizung_beobachter` und `heizung_thermometrie` schreiben nichts. Ein paar Tage Daten sammeln.
 3. **Schreibende Entities einzeln freischalten** und jede Änderung am Panel gegenprüfen. Besonders: Lüfter-Solldrehzahl (siehe Fallstricke).
-4. **Entity-IDs anpassen.** Die Konstanten oben in jeder `.py`-Datei zeigen auf diese Installation.
+4. **Entity-IDs anpassen.** Die Konstanten oben in jeder `.py`-Datei zeigen auf diese Installation, siehe [Eigene Gerätenamen und Bereiche](#eigene-gerätenamen-und-bereiche).
 5. **Regelung starten** mit `input_boolean.wp_autostart_aktiv` = aus und die WP von Hand einschalten. Log beobachten (`VL-Soll`, `Kompressor-Deckel`, `Luefter`).
 6. Erst dann Autostart und Heizgrenze einschalten.
 
 Der **Heartbeat-Watchdog** im ESP setzt Vorlauf-Soll und Kompressor-Maximum nach 30 Minuten ohne Befehl auf 32 °C / 90 Hz zurück. So bleibt die Anlage auch bei Ausfall von Home Assistant heizfähig.
 
 Der Sensor **„Modbus online“** im ESP meldet, wenn die Avarma nicht mehr auf Modbus antwortet (der ESP behält sonst einfach die letzten Werte). Die Regelung pausiert dann und schickt nach 10 Minuten eine Push-Nachricht – den Notify-Dienst in `NOTIFY_SERVICE` oder per `notify_service` in `apps.yaml` eintragen.
+
+## Eigene Gerätenamen und Bereiche
+
+Die Entity-IDs der Wärmepumpe stehen **fest** in den Dateien. Wer das ESPHome-Gerät anders nennt
+oder einem anderen Bereich zuordnet, muss sie anpassen. Sonst findet nicht nur ein Dashboard,
+sondern **auch die Regelung** ihre Werte nicht. (Danke an Lucky aus dem akkudoktor-Forum für den Hinweis.)
+
+**Woher die IDs kommen:** Home Assistant bildet sie beim Anlegen aus dem Gerätenamen und, in neueren
+Versionen, aus dem Bereich. Hier heißt das ESP-Gerät „ESPHome Web AVARMA“ und liegt im Bereich
+„Controllroom“. Deshalb gibt es in dieser Installation drei Präfixe nebeneinander:
+
+| Präfix | Herkunft |
+|---|---|
+| `controllroom_esphome_web_avarma_` | Gerätename + Bereich (neuere Entities) |
+| `esphome_web_avarma_` | Gerätename ohne Bereich (ältere Entities) |
+| `esphome_web_f34aa0_` | Knotenname `esphome-web-f34aa0` (die ersten Entities) |
+
+Die Endungen dahinter (`_vorlauftemperatur`, `_kompressor_frequenz_ist` …) kommen aus den Namen in
+`esphome/avarma-waermepumpe.yaml` und bleiben gleich, solange man diese YAML verwendet.
+
+**Betroffene Dateien:** `appdaemon/apps/*.py` (Konstanten oben), `homeassistant/automations.yaml`
+und ein eventuelles eigenes Dashboard.
+
+**Anpassen:** Erst die eigenen IDs nachsehen, z. B. unter *Entwicklerwerkzeuge → Vorlage*:
+
+```jinja
+{{ integration_entities('esphome') | select('search', 'vorlauftemperatur') | list }}
+```
+
+Dann alle drei Präfixe durch das eigene ersetzen (GNU sed, z. B. im Terminal-Add-on; `meine_wp_` ist
+ein Beispiel):
+
+```bash
+sed -i -E 's/\bcontrollroom_esphome_web_avarma_/meine_wp_/g; s/\besphome_web_avarma_/meine_wp_/g; s/\besphome_web_f34aa0_/meine_wp_/g' \
+  appdaemon/apps/*.py homeassistant/automations.yaml
+```
+
+Die Reihenfolge ist wichtig: `\b` sorgt dafür, dass `esphome_web_avarma_` nicht noch einmal mitten
+in `controllroom_esphome_web_avarma_` ersetzt wird. Danach mit `grep -n "meine_wp_" appdaemon/apps/*.py`
+gegenprüfen und im AppDaemon-Log auf Warnungen zu fehlenden Entities achten.
+
+Beim **Umbenennen eines Geräts** fragt Home Assistant, ob die Entity-IDs mit umbenannt werden sollen.
+Mit „Nein“ bleiben sie, wie sie sind. Ein **anderer Bereich** ändert vorhandene IDs nicht, nur
+Entities, die danach neu angelegt werden.
+
+**Kaskade:** Die Regelung ist für **genau eine** Wärmepumpe gebaut. Jede Konstante gibt es einmal,
+Lastverteilung, Deckel und Abtau-Logik kennen nur ein Gerät. Für zwei Geräte müsste man die Apps
+erweitern (z. B. eine Instanz je WP plus eine Logik, die entscheidet, wer wann läuft).
 
 ## Wichtige Fallstricke (Kurzfassung)
 
